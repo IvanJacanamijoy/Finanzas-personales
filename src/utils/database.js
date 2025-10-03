@@ -1,0 +1,676 @@
+// Sistema de base de datos usando localStorage para la aplicación web de finanzas personales
+
+const STORAGE_KEY = 'finanzas_personales_data';
+
+// Estructura inicial de datos
+const estructuraInicial = {
+  meses: {},
+  reportes: {}, // Nueva estructura para almacenar reportes históricos
+  configuracion: {
+    version: '1.0.0',
+    fechaCreacion: new Date().toISOString()
+  }
+};
+
+// Función para obtener datos del localStorage
+const obtenerDatosStorage = () => {
+  try {
+    const datos = localStorage.getItem(STORAGE_KEY);
+    if (!datos) {
+      return estructuraInicial;
+    }
+    return JSON.parse(datos);
+  } catch (error) {
+    console.error('Error al obtener datos del storage:', error);
+    return estructuraInicial;
+  }
+};
+
+// Función para guardar datos en localStorage
+const guardarDatosStorage = (datos) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(datos));
+    return true;
+  } catch (error) {
+    console.error('Error al guardar datos en storage:', error);
+    return false;
+  }
+};
+
+// Función para obtener el número del mes actual
+const obtenerNumeroMes = () => {
+  const fecha = new Date();
+  const año = fecha.getFullYear();
+  const mes = fecha.getMonth() + 1; // getMonth() devuelve 0-11
+  return `${año}-${mes.toString().padStart(2, '0')}`;
+};
+
+// Inicializar la base de datos
+export const inicializarDB = async () => {
+  try {
+    const datos = obtenerDatosStorage();
+    if (!datos.meses) {
+      datos.meses = {};
+      guardarDatosStorage(datos);
+    }
+    return true;
+  } catch (error) {
+    console.error('Error inicializando DB:', error);
+    return false;
+  }
+};
+
+// Inicializar un nuevo mes
+export const inicializarMes = async () => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.meses[numeroMes]) {
+      datos.meses[numeroMes] = {
+        inicializado: true,
+        fechaInicializacion: new Date().toISOString(),
+        ingresos: [],
+        activos: [],
+        pasivos: []
+      };
+      
+      const guardado = guardarDatosStorage(datos);
+      if (!guardado) {
+        throw new Error('No se pudo guardar la inicialización del mes');
+      }
+    }
+    
+    return datos.meses[numeroMes];
+  } catch (error) {
+    console.error('Error inicializando mes:', error);
+    throw error;
+  }
+};
+
+// Insertar un nuevo ingreso
+export const insertarIngreso = async (descripcion, valor) => {
+  try {
+    if (!descripcion || valor <= 0) {
+      throw new Error('Descripción y valor son requeridos');
+    }
+
+    // Validar que descripcion sea un string
+    if (typeof descripcion !== 'string') {
+      throw new Error('La descripción debe ser un texto válido');
+    }
+
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    // Asegurar que el mes esté inicializado
+    if (!datos.meses[numeroMes]) {
+      await inicializarMes();
+      // Recargar datos después de inicializar
+      const datosActualizados = obtenerDatosStorage();
+      datos.meses = datosActualizados.meses;
+    }
+    
+    const nuevoIngreso = {
+      id: Date.now().toString(),
+      descripcion: descripcion.trim(),
+      valor: parseFloat(valor),
+      fecha: new Date().toISOString(),
+      tipo: 'ingreso'
+    };
+    
+    datos.meses[numeroMes].ingresos.push(nuevoIngreso);
+    
+    const guardado = guardarDatosStorage(datos);
+    if (!guardado) {
+      throw new Error('No se pudo guardar el ingreso');
+    }
+    
+    return nuevoIngreso;
+  } catch (error) {
+    console.error('Error insertando ingreso:', error);
+    throw error;
+  }
+};
+
+// Insertar un nuevo activo
+export const insertarActivo = async (descripcion, valor) => {
+  try {
+    if (!descripcion || valor <= 0) {
+      throw new Error('Descripción y valor son requeridos');
+    }
+
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    // Asegurar que el mes esté inicializado
+    if (!datos.meses[numeroMes]) {
+      await inicializarMes();
+      // Recargar datos después de inicializar
+      const datosActualizados = obtenerDatosStorage();
+      datos.meses = datosActualizados.meses;
+    }
+    
+    const nuevoActivo = {
+      id: Date.now().toString(),
+      descripcion: descripcion.trim(),
+      valor: parseFloat(valor),
+      fecha: new Date().toISOString(),
+      tipo: 'activo'
+    };
+    
+    datos.meses[numeroMes].activos.push(nuevoActivo);
+    
+    const guardado = guardarDatosStorage(datos);
+    if (!guardado) {
+      throw new Error('No se pudo guardar el activo');
+    }
+    
+    return nuevoActivo;
+  } catch (error) {
+    console.error('Error insertando activo:', error);
+    throw error;
+  }
+};
+
+// Insertar un nuevo pasivo
+export const insertarPasivo = async (descripcion, valor) => {
+  try {
+    if (!descripcion || valor <= 0) {
+      throw new Error('Descripción y valor son requeridos');
+    }
+
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    // Asegurar que el mes esté inicializado
+    if (!datos.meses[numeroMes]) {
+      await inicializarMes();
+      // Recargar datos después de inicializar
+      const datosActualizados = obtenerDatosStorage();
+      datos.meses = datosActualizados.meses;
+    }
+    
+    const nuevoPasivo = {
+      id: Date.now().toString(),
+      descripcion: descripcion.trim(),
+      valor: parseFloat(valor),
+      fecha: new Date().toISOString(),
+      tipo: 'pasivo'
+    };
+    
+    datos.meses[numeroMes].pasivos.push(nuevoPasivo);
+    
+    const guardado = guardarDatosStorage(datos);
+    if (!guardado) {
+      throw new Error('No se pudo guardar el pasivo');
+    }
+    
+    return nuevoPasivo;
+  } catch (error) {
+    console.error('Error insertando pasivo:', error);
+    throw error;
+  }
+};
+
+// Obtener datos del mes actual
+export const obtenerDatosMes = async () => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.meses[numeroMes]) {
+      return {
+        inicializado: false,
+        ingresos: [],
+        activos: [],
+        pasivos: []
+      };
+    }
+    
+    return datos.meses[numeroMes];
+  } catch (error) {
+    console.error('Error obteniendo datos del mes:', error);
+    throw error;
+  }
+};
+
+// Verificar si el mes actual está inicializado
+export const mesEstaInicializado = async () => {
+  try {
+    const datosMes = await obtenerDatosMes();
+    return datosMes.inicializado || false;
+  } catch (error) {
+    console.error('Error verificando inicialización del mes:', error);
+    return false;
+  }
+};
+
+// Limpiar todos los datos (usar con precaución)
+export const limpiarDatos = async () => {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    return true;
+  } catch (error) {
+    console.error('Error limpiando datos:', error);
+    return false;
+  }
+};
+
+// Editar ingreso
+export const editarIngreso = async (id, descripcion, valor) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.meses[numeroMes]) {
+      throw new Error('El mes no está inicializado');
+    }
+    
+    const ingresoIndex = datos.meses[numeroMes].ingresos.findIndex(ingreso => ingreso.id === id);
+    if (ingresoIndex === -1) {
+      throw new Error('Ingreso no encontrado');
+    }
+    
+    datos.meses[numeroMes].ingresos[ingresoIndex] = {
+      ...datos.meses[numeroMes].ingresos[ingresoIndex],
+      descripcion,
+      valor: parseFloat(valor),
+      fechaModificacion: new Date().toISOString()
+    };
+    
+    guardarDatosStorage(datos);
+    return datos.meses[numeroMes].ingresos[ingresoIndex];
+  } catch (error) {
+    console.error('Error editando ingreso:', error);
+    throw error;
+  }
+};
+
+// Eliminar ingreso
+export const eliminarIngreso = async (id) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.meses[numeroMes]) {
+      throw new Error('El mes no está inicializado');
+    }
+    
+    const ingresoIndex = datos.meses[numeroMes].ingresos.findIndex(ingreso => ingreso.id === id);
+    if (ingresoIndex === -1) {
+      throw new Error('Ingreso no encontrado');
+    }
+    
+    const ingresoEliminado = datos.meses[numeroMes].ingresos.splice(ingresoIndex, 1)[0];
+    guardarDatosStorage(datos);
+    return ingresoEliminado;
+  } catch (error) {
+    console.error('Error eliminando ingreso:', error);
+    throw error;
+  }
+};
+
+// Editar activo
+export const editarActivo = async (id, descripcion, valor) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.meses[numeroMes]) {
+      throw new Error('El mes no está inicializado');
+    }
+    
+    const activoIndex = datos.meses[numeroMes].activos.findIndex(activo => activo.id === id);
+    if (activoIndex === -1) {
+      throw new Error('Activo no encontrado');
+    }
+    
+    datos.meses[numeroMes].activos[activoIndex] = {
+      ...datos.meses[numeroMes].activos[activoIndex],
+      descripcion,
+      valor: parseFloat(valor),
+      fechaModificacion: new Date().toISOString()
+    };
+    
+    guardarDatosStorage(datos);
+    return datos.meses[numeroMes].activos[activoIndex];
+  } catch (error) {
+    console.error('Error editando activo:', error);
+    throw error;
+  }
+};
+
+// Eliminar activo
+export const eliminarActivo = async (id) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.meses[numeroMes]) {
+      throw new Error('El mes no está inicializado');
+    }
+    
+    const activoIndex = datos.meses[numeroMes].activos.findIndex(activo => activo.id === id);
+    if (activoIndex === -1) {
+      throw new Error('Activo no encontrado');
+    }
+    
+    const activoEliminado = datos.meses[numeroMes].activos.splice(activoIndex, 1)[0];
+    guardarDatosStorage(datos);
+    return activoEliminado;
+  } catch (error) {
+    console.error('Error eliminando activo:', error);
+    throw error;
+  }
+};
+
+// Editar pasivo
+export const editarPasivo = async (id, descripcion, valor) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.meses[numeroMes]) {
+      throw new Error('El mes no está inicializado');
+    }
+    
+    const pasivoIndex = datos.meses[numeroMes].pasivos.findIndex(pasivo => pasivo.id === id);
+    if (pasivoIndex === -1) {
+      throw new Error('Pasivo no encontrado');
+    }
+    
+    datos.meses[numeroMes].pasivos[pasivoIndex] = {
+      ...datos.meses[numeroMes].pasivos[pasivoIndex],
+      descripcion,
+      valor: parseFloat(valor),
+      fechaModificacion: new Date().toISOString()
+    };
+    
+    guardarDatosStorage(datos);
+    return datos.meses[numeroMes].pasivos[pasivoIndex];
+  } catch (error) {
+    console.error('Error editando pasivo:', error);
+    throw error;
+  }
+};
+
+// Eliminar pasivo
+export const eliminarPasivo = async (id) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.meses[numeroMes]) {
+      throw new Error('El mes no está inicializado');
+    }
+    
+    const pasivoIndex = datos.meses[numeroMes].pasivos.findIndex(pasivo => pasivo.id === id);
+    if (pasivoIndex === -1) {
+      throw new Error('Pasivo no encontrado');
+    }
+    
+    const pasivoEliminado = datos.meses[numeroMes].pasivos.splice(pasivoIndex, 1)[0];
+    guardarDatosStorage(datos);
+    return pasivoEliminado;
+  } catch (error) {
+    console.error('Error eliminando pasivo:', error);
+    throw error;
+  }
+};
+
+// Exportar datos para respaldo
+export const exportarDatos = async () => {
+  try {
+    const datos = obtenerDatosStorage();
+    return JSON.stringify(datos, null, 2);
+  } catch (error) {
+    console.error('Error exportando datos:', error);
+    throw error;
+  }
+};
+
+// Importar datos desde respaldo
+export const importarDatos = async (datosJSON) => {
+  try {
+    const datos = JSON.parse(datosJSON);
+    const guardado = guardarDatosStorage(datos);
+    if (!guardado) {
+      throw new Error('No se pudieron importar los datos');
+    }
+    return true;
+  } catch (error) {
+    console.error('Error importando datos:', error);
+    throw error;
+  }
+};
+
+// Obtener estadísticas generales
+export const obtenerEstadisticas = async () => {
+  try {
+    const datos = obtenerDatosStorage();
+    const estadisticas = {
+      totalMeses: Object.keys(datos.meses || {}).length,
+      mesActual: obtenerNumeroMes(),
+      fechaCreacion: datos.configuracion?.fechaCreacion || null
+    };
+    
+    return estadisticas;
+  } catch (error) {
+    console.error('Error obteniendo estadísticas:', error);
+    throw error;
+  }
+};
+
+// Funciones para reportes históricos
+export const generarReporteMensual = async (mesId = null) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const mesActual = mesId || obtenerNumeroMes();
+    const datosMes = datos.meses[mesActual];
+    
+    if (!datosMes) {
+      throw new Error(`No hay datos para el mes ${mesActual}`);
+    }
+
+    // Calcular totales
+    const totalIngresos = datosMes.ingresos.reduce((sum, item) => sum + item.valor, 0);
+    const totalActivos = datosMes.activos.reduce((sum, item) => sum + item.valor, 0);
+    const totalPasivos = datosMes.pasivos.reduce((sum, item) => sum + item.valor, 0);
+    
+    // Calcular métricas financieras
+    const patrimonioNeto = totalActivos - totalPasivos;
+    const liquidezDisponible = totalIngresos - totalPasivos;
+    const ratioDeuda = totalActivos > 0 ? (totalPasivos / totalActivos) * 100 : 0;
+
+    const reporte = {
+      id: mesActual,
+      fecha: new Date().toISOString(),
+      periodo: mesActual,
+      resumen: {
+        totalIngresos,
+        totalActivos,
+        totalPasivos,
+        patrimonioNeto,
+        liquidezDisponible,
+        ratioDeuda: Math.round(ratioDeuda * 100) / 100
+      },
+      detalles: {
+        ingresos: datosMes.ingresos.map(item => ({
+          descripcion: item.descripcion,
+          valor: item.valor,
+          fecha: item.fecha
+        })),
+        activos: datosMes.activos.map(item => ({
+          descripcion: item.descripcion,
+          valor: item.valor,
+          fecha: item.fecha
+        })),
+        pasivos: datosMes.pasivos.map(item => ({
+          descripcion: item.descripcion,
+          valor: item.valor,
+          fecha: item.fecha
+        }))
+      },
+      analisis: {
+        situacionPatrimonial: patrimonioNeto >= 0 ? 'Positiva' : 'Negativa',
+        situacionLiquidez: liquidezDisponible >= 0 ? 'Buena' : 'Ajustada',
+        nivelEndeudamiento: ratioDeuda < 30 ? 'Bajo' : ratioDeuda < 60 ? 'Moderado' : 'Alto'
+      }
+    };
+
+    return reporte;
+  } catch (error) {
+    console.error('Error generando reporte mensual:', error);
+    throw error;
+  }
+};
+
+export const guardarReporteMensual = async (reporte) => {
+  try {
+    const datos = obtenerDatosStorage();
+    
+    if (!datos.reportes) {
+      datos.reportes = {};
+    }
+    
+    datos.reportes[reporte.id] = reporte;
+    guardarDatosStorage(datos);
+    
+    return reporte;
+  } catch (error) {
+    console.error('Error guardando reporte mensual:', error);
+    throw error;
+  }
+};
+
+export const obtenerReportesHistoricos = async () => {
+  try {
+    const datos = obtenerDatosStorage();
+    return datos.reportes || {};
+  } catch (error) {
+    console.error('Error obteniendo reportes históricos:', error);
+    throw error;
+  }
+};
+
+export const obtenerReportePorMes = async (mesId) => {
+  try {
+    const datos = obtenerDatosStorage();
+    return datos.reportes?.[mesId] || null;
+  } catch (error) {
+    console.error('Error obteniendo reporte por mes:', error);
+    throw error;
+  }
+};
+
+export const obtenerDatosMesPorId = async (mesId) => {
+  try {
+    const datos = obtenerDatosStorage();
+    return datos.meses?.[mesId] || null;
+  } catch (error) {
+    console.error('Error obteniendo datos del mes:', error);
+    throw error;
+  }
+};
+
+export const generarYGuardarReporteMensual = async (mesId = null) => {
+  try {
+    const reporte = await generarReporteMensual(mesId);
+    await guardarReporteMensual(reporte);
+    return reporte;
+  } catch (error) {
+    console.error('Error generando y guardando reporte mensual:', error);
+    throw error;
+  }
+};
+
+// Función para obtener comparativa entre dos meses
+export const obtenerComparativaMeses = async (mesId1, mesId2) => {
+  try {
+    const reporte1 = await obtenerReportePorMes(mesId1);
+    const reporte2 = await obtenerReportePorMes(mesId2);
+    
+    if (!reporte1 || !reporte2) {
+      return null;
+    }
+
+    const comparativa = {
+      mes1: {
+        periodo: reporte1.periodo,
+        fecha: reporte1.fecha,
+        resumen: reporte1.resumen
+      },
+      mes2: {
+        periodo: reporte2.periodo,
+        fecha: reporte2.fecha,
+        resumen: reporte2.resumen
+      },
+      diferencias: {
+        ingresos: reporte2.resumen.totalIngresos - reporte1.resumen.totalIngresos,
+        activos: reporte2.resumen.totalActivos - reporte1.resumen.totalActivos,
+        pasivos: reporte2.resumen.totalPasivos - reporte1.resumen.totalPasivos,
+        patrimonioNeto: reporte2.resumen.patrimonioNeto - reporte1.resumen.patrimonioNeto,
+        liquidez: reporte2.resumen.liquidezDisponible - reporte1.resumen.liquidezDisponible
+      },
+      porcentajes: {
+        ingresos: reporte1.resumen.totalIngresos !== 0 ? 
+          ((reporte2.resumen.totalIngresos - reporte1.resumen.totalIngresos) / Math.abs(reporte1.resumen.totalIngresos)) * 100 : 0,
+        activos: reporte1.resumen.totalActivos !== 0 ? 
+          ((reporte2.resumen.totalActivos - reporte1.resumen.totalActivos) / Math.abs(reporte1.resumen.totalActivos)) * 100 : 0,
+        pasivos: reporte1.resumen.totalPasivos !== 0 ? 
+          ((reporte2.resumen.totalPasivos - reporte1.resumen.totalPasivos) / Math.abs(reporte1.resumen.totalPasivos)) * 100 : 0,
+        patrimonioNeto: reporte1.resumen.patrimonioNeto !== 0 ? 
+          ((reporte2.resumen.patrimonioNeto - reporte1.resumen.patrimonioNeto) / Math.abs(reporte1.resumen.patrimonioNeto)) * 100 : 0,
+        liquidez: reporte1.resumen.liquidezDisponible !== 0 ? 
+          ((reporte2.resumen.liquidezDisponible - reporte1.resumen.liquidezDisponible) / Math.abs(reporte1.resumen.liquidezDisponible)) * 100 : 0
+      }
+    };
+
+    return comparativa;
+  } catch (error) {
+    console.error('Error al obtener comparativa entre meses:', error);
+    throw error;
+  }
+};
+
+// Función para obtener tendencias de los últimos N meses
+export const obtenerTendenciasMeses = async (numeroMeses = 6) => {
+  try {
+    const reportes = await obtenerReportesHistoricos();
+    const reportesArray = Object.values(reportes);
+    
+    if (!reportesArray || reportesArray.length === 0) {
+      return null;
+    }
+
+    // Ordenar reportes por fecha (más recientes primero)
+    const reportesOrdenados = reportesArray
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+      .slice(0, numeroMeses);
+
+    const tendencias = {
+      meses: reportesOrdenados.map(r => r.periodo),
+      ingresos: reportesOrdenados.map(r => r.resumen.totalIngresos),
+      activos: reportesOrdenados.map(r => r.resumen.totalActivos),
+      pasivos: reportesOrdenados.map(r => r.resumen.totalPasivos),
+      patrimonioNeto: reportesOrdenados.map(r => r.resumen.patrimonioNeto),
+      liquidez: reportesOrdenados.map(r => r.resumen.liquidezDisponible),
+      promedios: {
+        ingresos: reportesOrdenados.reduce((sum, r) => sum + r.resumen.totalIngresos, 0) / reportesOrdenados.length,
+        activos: reportesOrdenados.reduce((sum, r) => sum + r.resumen.totalActivos, 0) / reportesOrdenados.length,
+        pasivos: reportesOrdenados.reduce((sum, r) => sum + r.resumen.totalPasivos, 0) / reportesOrdenados.length,
+        patrimonioNeto: reportesOrdenados.reduce((sum, r) => sum + r.resumen.patrimonioNeto, 0) / reportesOrdenados.length,
+        liquidez: reportesOrdenados.reduce((sum, r) => sum + r.resumen.liquidezDisponible, 0) / reportesOrdenados.length
+      }
+    };
+
+    return tendencias;
+  } catch (error) {
+    console.error('Error al obtener tendencias de meses:', error);
+    throw error;
+  }
+};
+
+// Inicializar automáticamente al cargar el módulo
+inicializarDB();

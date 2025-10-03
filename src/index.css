@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/* Definición de colores personalizados para Tailwind 4.x */
+@theme {
+  --color-primary-50: #f0fdf4;
+  --color-primary-100: #dcfce7;
+  --color-primary-200: #bbf7d0;
+  --color-primary-300: #86efac;
+  --color-primary-400: #4ade80;
+  --color-primary-500: #22c55e;
+  --color-primary-600: #16a34a;
+  --color-primary-700: #15803d;
+  --color-primary-800: #166534;
+  --color-primary-900: #14532d;
+  --color-primary-950: #052e16;
+  
+  --color-success-50: #f0fdf4;
+  --color-success-100: #dcfce7;
+  --color-success-200: #bbf7d0;
+  --color-success-300: #86efac;
+  --color-success-400: #4ade80;
+  --color-success-500: #22c55e;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+  --color-success-800: #166534;
+  --color-success-900: #14532d;
+  
+  --color-secondary-50: #f8fafc;
+  --color-secondary-100: #f1f5f9;
+  --color-secondary-200: #e2e8f0;
+  --color-secondary-300: #cbd5e1;
+  --color-secondary-400: #94a3b8;
+  --color-secondary-500: #64748b;
+  --color-secondary-600: #475569;
+  --color-secondary-700: #334155;
+  --color-secondary-800: #1e293b;
+  --color-secondary-900: #0f172a;
+}
+
+/* Estilos personalizados para botones */
+@layer components {
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 active:bg-primary-800 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-md;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary-200 hover:bg-secondary-300 active:bg-secondary-400 text-secondary-800 font-semibold py-3 px-6 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
+  }
+  
+  .btn-success {
+    @apply bg-success-500 hover:bg-success-600 active:bg-success-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-md;
+  }
+  
+  .btn-danger {
+    @apply bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-md;
+  }
+  
+  .btn-outline-primary {
+    @apply border-2 border-primary-600 text-primary-600 hover:bg-primary-600 hover:text-white active:bg-primary-700 font-semibold py-3 px-6 rounded-lg transition-all duration-200 ease-in-out transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
+  }
+}
+
+/* Gradientes personalizados */
+@layer utilities {
+  .gradient-bg {
+    @apply bg-gradient-to-br from-primary-50 to-primary-100;
+  }
+  
+  .header-gradient {
+    @apply bg-gradient-to-r from-primary-600 to-primary-700;
+  }
+}
+
+/* Estilos para elementos de valor positivo y negativo */
+.value-positive {
+  @apply text-primary-700;
+}
+
+.value-negative {
+  @apply text-red-600;
+}
+
+/* Spinner de carga */
+.loading-spinner {
+  @apply animate-spin rounded-full border-2 border-white border-t-transparent;
+}
