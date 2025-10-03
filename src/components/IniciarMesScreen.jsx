@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { inicializarMes, insertarIngreso, obtenerDatosMes, mesEstaInicializado, editarIngreso, eliminarIngreso } from '../utils/database';
+import { 
+  inicializarMes, 
+  obtenerDatosMes, 
+  insertarIngreso, 
+  editarIngreso, 
+  eliminarIngreso,
+  mesEstaInicializado,
+  verificarDeudasPendientes,
+  generarDeudasAutomaticas
+} from '../utils/database';
 import { useToast } from '../contexts/ToastContext';
 import { formatearNumeroConSeparadores, removerSeparadores, convertirANumero } from '../utils/formatters';
 
@@ -11,10 +20,16 @@ function IniciarMesScreen() {
   const [ingresos, setIngresos] = useState([]);
   const [mesYaInicializado, setMesYaInicializado] = useState(false);
   const [editandoIngreso, setEditandoIngreso] = useState(null);
+  
+  // Estados para deudas programadas
+  const [deudasPendientes, setDeudasPendientes] = useState([]);
+  const [mostrarDeudasPendientes, setMostrarDeudasPendientes] = useState(false);
+  
   const { showSuccess, showError } = useToast();
 
   useEffect(() => {
     cargarDatos();
+    verificarDeudasProgramadas();
   }, []);
 
   const cargarDatos = async () => {
@@ -31,6 +46,18 @@ function IniciarMesScreen() {
       console.error('Error al cargar datos:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verificarDeudasProgramadas = async () => {
+    try {
+      const deudas = await verificarDeudasPendientes();
+      if (deudas.length > 0) {
+        setDeudasPendientes(deudas);
+        setMostrarDeudasPendientes(true);
+      }
+    } catch (error) {
+      console.error('Error al verificar deudas programadas:', error);
     }
   };
 
@@ -57,11 +84,21 @@ function IniciarMesScreen() {
     try {
       setLoading(true);
       await inicializarMes(monto, descripcionIngreso);
+      
+      // Generar deudas automáticas si hay deudas pendientes
+      if (deudasPendientes.length > 0) {
+        await generarDeudasAutomaticas();
+        showSuccess('¡Mes inicializado correctamente! Se han generado las deudas programadas.');
+      } else {
+        showSuccess('¡Mes inicializado correctamente!');
+      }
+      
       await cargarDatos();
       setMontoIngreso('');
       setMontoIngresoDisplay('');
       setDescripcionIngreso('');
-      showSuccess('¡Mes inicializado correctamente!');
+      setMostrarDeudasPendientes(false);
+      setDeudasPendientes([]);
     } catch (error) {
       console.error('Error al inicializar mes:', error);
       showError('Error al inicializar el mes');
@@ -380,6 +417,94 @@ function IniciarMesScreen() {
           </div>
         )}
       </div>
+
+      {/* Modal de Deudas Pendientes */}
+      {mostrarDeudasPendientes && deudasPendientes.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-800">Deudas Programadas Pendientes</h2>
+                  <p className="text-gray-600 mt-1">
+                    Se han detectado {deudasPendientes.length} deuda(s) programada(s) que deben generarse este mes.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setMostrarDeudasPendientes(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                <h3 className="text-lg font-semibold text-gray-800">Deudas que se generarán automáticamente:</h3>
+                <div className="space-y-3">
+                  {deudasPendientes.map((deuda, index) => (
+                    <div key={index} className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-800">{deuda.descripcion}</h4>
+                          <div className="text-sm text-gray-600 mt-1 space-y-1">
+                            <p><span className="font-medium">Categoría:</span> {deuda.categoria}</p>
+                            <p><span className="font-medium">Valor:</span> {new Intl.NumberFormat('es-CO', {
+                              style: 'currency',
+                              currency: 'COP',
+                              minimumFractionDigits: 0
+                            }).format(deuda.valor)}</p>
+                            <p><span className="font-medium">Frecuencia:</span> {deuda.frecuencia}</p>
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <h4 className="font-medium text-blue-800">¿Qué significa esto?</h4>
+                    <p className="text-blue-700 text-sm mt-1">
+                      Estas deudas se agregarán automáticamente a tus pasivos del mes cuando inicialices el mes. 
+                      Puedes continuar con la inicialización o cerrar este diálogo para revisar las deudas programadas primero.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setMostrarDeudasPendientes(false)}
+                  className="btn-primary flex-1"
+                >
+                  Continuar con la inicialización
+                </button>
+                <button
+                  onClick={() => {
+                    setMostrarDeudasPendientes(false);
+                    navigation.navigate('Pasivos');
+                  }}
+                  className="btn-secondary"
+                >
+                  Revisar Deudas Programadas
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

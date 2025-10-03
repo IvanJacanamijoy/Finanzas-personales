@@ -6,6 +6,7 @@ const STORAGE_KEY = 'finanzas_personales_data';
 const estructuraInicial = {
   meses: {},
   reportes: {}, // Nueva estructura para almacenar reportes históricos
+  deudasProgramadas: {}, // Nueva estructura para deudas programadas
   configuracion: {
     version: '1.0.0',
     fechaCreacion: new Date().toISOString()
@@ -671,6 +672,338 @@ export const obtenerTendenciasMeses = async (numeroMeses = 6) => {
   } catch (error) {
     console.error('Error al obtener tendencias de meses:', error);
     throw error;
+  }
+};
+
+// ==================== FUNCIONES PARA DEUDAS PROGRAMADAS ====================
+
+// Crear una nueva deuda programada
+export const crearDeudaProgramada = async (deudaData) => {
+  try {
+    const { descripcion, categoria, valor, frecuencia, fechaInicio, fechaFin } = deudaData;
+    
+    if (!descripcion || !categoria || !valor || !frecuencia || !fechaInicio) {
+      throw new Error('Todos los campos obligatorios deben estar completos');
+    }
+
+    const datos = obtenerDatosStorage();
+    
+    if (!datos.deudasProgramadas) {
+      datos.deudasProgramadas = {};
+    }
+
+    const nuevaDeuda = {
+      id: Date.now().toString(),
+      descripcion: descripcion.trim(),
+      categoria,
+      valor: parseFloat(valor),
+      frecuencia, // 'mensual', 'quincenal', 'semanal'
+      fechaInicio: new Date(fechaInicio).toISOString(),
+      fechaFin: fechaFin ? new Date(fechaFin).toISOString() : null,
+      activa: true,
+      fechaCreacion: new Date().toISOString(),
+      proximaGeneracion: calcularProximaGeneracion(fechaInicio, frecuencia),
+      configuracion: generarConfiguracionFrecuencia(frecuencia, fechaInicio)
+    };
+
+    datos.deudasProgramadas[nuevaDeuda.id] = nuevaDeuda;
+    
+    const guardado = guardarDatosStorage(datos);
+    if (!guardado) {
+      throw new Error('No se pudo guardar la deuda programada');
+    }
+
+    return nuevaDeuda;
+  } catch (error) {
+    console.error('Error creando deuda programada:', error);
+    throw error;
+  }
+};
+
+// Obtener todas las deudas programadas
+export const obtenerDeudasProgramadas = async () => {
+  try {
+    const datos = obtenerDatosStorage();
+    return Object.values(datos.deudasProgramadas || {});
+  } catch (error) {
+    console.error('Error obteniendo deudas programadas:', error);
+    throw error;
+  }
+};
+
+// Obtener deudas programadas activas
+export const obtenerDeudasProgramadasActivas = async () => {
+  try {
+    const todasLasDeudas = await obtenerDeudasProgramadas();
+    return todasLasDeudas.filter(deuda => deuda.activa);
+  } catch (error) {
+    console.error('Error obteniendo deudas programadas activas:', error);
+    throw error;
+  }
+};
+
+// Editar deuda programada
+export const editarDeudaProgramada = async (id, datosActualizados) => {
+  try {
+    const datos = obtenerDatosStorage();
+    
+    if (!datos.deudasProgramadas || !datos.deudasProgramadas[id]) {
+      throw new Error('Deuda programada no encontrada');
+    }
+
+    const deudaActual = datos.deudasProgramadas[id];
+    const deudaActualizada = {
+      ...deudaActual,
+      ...datosActualizados,
+      fechaModificacion: new Date().toISOString()
+    };
+
+    // Recalcular próxima generación si cambió la frecuencia o fecha de inicio
+    if (datosActualizados.frecuencia || datosActualizados.fechaInicio) {
+      deudaActualizada.proximaGeneracion = calcularProximaGeneracion(
+        deudaActualizada.fechaInicio, 
+        deudaActualizada.frecuencia
+      );
+      deudaActualizada.configuracion = generarConfiguracionFrecuencia(
+        deudaActualizada.frecuencia, 
+        deudaActualizada.fechaInicio
+      );
+    }
+
+    datos.deudasProgramadas[id] = deudaActualizada;
+    guardarDatosStorage(datos);
+    
+    return deudaActualizada;
+  } catch (error) {
+    console.error('Error editando deuda programada:', error);
+    throw error;
+  }
+};
+
+// Eliminar deuda programada
+export const eliminarDeudaProgramada = async (id) => {
+  try {
+    const datos = obtenerDatosStorage();
+    
+    if (!datos.deudasProgramadas || !datos.deudasProgramadas[id]) {
+      throw new Error('Deuda programada no encontrada');
+    }
+
+    const deudaEliminada = datos.deudasProgramadas[id];
+    delete datos.deudasProgramadas[id];
+    guardarDatosStorage(datos);
+    
+    return deudaEliminada;
+  } catch (error) {
+    console.error('Error eliminando deuda programada:', error);
+    throw error;
+  }
+};
+
+// Activar/Desactivar deuda programada
+export const toggleDeudaProgramada = async (id) => {
+  try {
+    const datos = obtenerDatosStorage();
+    
+    if (!datos.deudasProgramadas || !datos.deudasProgramadas[id]) {
+      throw new Error('Deuda programada no encontrada');
+    }
+
+    datos.deudasProgramadas[id].activa = !datos.deudasProgramadas[id].activa;
+    datos.deudasProgramadas[id].fechaModificacion = new Date().toISOString();
+    
+    guardarDatosStorage(datos);
+    return datos.deudasProgramadas[id];
+  } catch (error) {
+    console.error('Error cambiando estado de deuda programada:', error);
+    throw error;
+  }
+};
+
+// Verificar deudas pendientes para el mes actual
+export const verificarDeudasPendientes = async () => {
+  try {
+    const deudasActivas = await obtenerDeudasProgramadasActivas();
+    const fechaActual = new Date();
+    const mesActual = obtenerNumeroMes();
+    
+    const deudasPendientes = [];
+    
+    for (const deuda of deudasActivas) {
+      const proximaGeneracion = new Date(deuda.proximaGeneracion);
+      
+      // Verificar si la deuda debe generarse este mes
+      if (proximaGeneracion <= fechaActual) {
+        // Verificar si ya existe en el mes actual
+        const datosMes = await obtenerDatosMes();
+        const yaExiste = datosMes.pasivos?.some(pasivo => 
+          pasivo.deudaProgramadaId === deuda.id
+        );
+        
+        if (!yaExiste) {
+          deudasPendientes.push(deuda);
+        }
+      }
+    }
+    
+    return deudasPendientes;
+  } catch (error) {
+    console.error('Error verificando deudas pendientes:', error);
+    throw error;
+  }
+};
+
+// Generar deudas automáticamente
+export const generarDeudasAutomaticas = async (deudasSeleccionadas = null) => {
+  try {
+    const deudasPendientes = deudasSeleccionadas || await verificarDeudasPendientes();
+    const deudasGeneradas = [];
+    
+    for (const deuda of deudasPendientes) {
+      // Crear el pasivo automáticamente
+      const nuevoPasivo = await insertarPasivo(
+        `${deuda.descripcion} (Automático)`,
+        deuda.valor,
+        deuda.categoria
+      );
+      
+      // Agregar referencia a la deuda programada
+      const datos = obtenerDatosStorage();
+      const numeroMes = obtenerNumeroMes();
+      const pasivoIndex = datos.meses[numeroMes].pasivos.findIndex(p => p.id === nuevoPasivo.id);
+      
+      if (pasivoIndex !== -1) {
+        datos.meses[numeroMes].pasivos[pasivoIndex].deudaProgramadaId = deuda.id;
+        datos.meses[numeroMes].pasivos[pasivoIndex].esAutomatico = true;
+        guardarDatosStorage(datos);
+      }
+      
+      // Actualizar próxima generación
+      await actualizarProximaGeneracion(deuda.id);
+      
+      deudasGeneradas.push({
+        deuda: deuda,
+        pasivo: nuevoPasivo
+      });
+    }
+    
+    return deudasGeneradas;
+  } catch (error) {
+    console.error('Error generando deudas automáticas:', error);
+    throw error;
+  }
+};
+
+// Funciones auxiliares
+const calcularProximaGeneracion = (fechaInicio, frecuencia) => {
+  const fecha = new Date(fechaInicio);
+  const hoy = new Date();
+  
+  switch (frecuencia) {
+    case 'mensual':
+      // Encontrar el próximo mes
+      while (fecha <= hoy) {
+        fecha.setMonth(fecha.getMonth() + 1);
+      }
+      break;
+    case 'quincenal':
+      // Cada 15 días
+      while (fecha <= hoy) {
+        fecha.setDate(fecha.getDate() + 15);
+      }
+      break;
+    case 'semanal':
+      // Cada 7 días
+      while (fecha <= hoy) {
+        fecha.setDate(fecha.getDate() + 7);
+      }
+      break;
+    default:
+      throw new Error('Frecuencia no válida');
+  }
+  
+  return fecha.toISOString();
+};
+
+const generarConfiguracionFrecuencia = (frecuencia, fechaInicio) => {
+  const fecha = new Date(fechaInicio);
+  
+  switch (frecuencia) {
+    case 'mensual':
+      return {
+        diaDelMes: fecha.getDate()
+      };
+    case 'quincenal':
+      return {
+        intervalo: 15
+      };
+    case 'semanal':
+      return {
+        diaDeLaSemana: fecha.getDay(),
+        intervalo: 7
+      };
+    default:
+      return {};
+  }
+};
+
+const actualizarProximaGeneracion = async (deudaId) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const deuda = datos.deudasProgramadas[deudaId];
+    
+    if (deuda) {
+      deuda.proximaGeneracion = calcularProximaGeneracion(
+        deuda.proximaGeneracion, 
+        deuda.frecuencia
+      );
+      guardarDatosStorage(datos);
+    }
+  } catch (error) {
+    console.error('Error actualizando próxima generación:', error);
+    throw error;
+  }
+};
+
+// Función para calcular días hasta vencimiento
+export const calcularDiasHastaVencimiento = (fechaProximaGeneracion) => {
+  try {
+    const hoy = new Date();
+    const fechaVencimiento = new Date(fechaProximaGeneracion);
+    
+    // Normalizar las fechas para comparar solo días (sin horas)
+    hoy.setHours(0, 0, 0, 0);
+    fechaVencimiento.setHours(0, 0, 0, 0);
+    
+    const diferenciaTiempo = fechaVencimiento.getTime() - hoy.getTime();
+    const diferenciaDias = Math.ceil(diferenciaTiempo / (1000 * 3600 * 24));
+    
+    return diferenciaDias;
+  } catch (error) {
+    console.error('Error calculando días hasta vencimiento:', error);
+    return null;
+  }
+};
+
+// Función para obtener deudas programadas con información de vencimiento
+export const obtenerDeudasProgramadasConVencimiento = async () => {
+  try {
+    const deudas = await obtenerDeudasProgramadasActivas();
+    
+    return deudas.map(deuda => {
+      const diasHastaVencimiento = calcularDiasHastaVencimiento(deuda.proximaGeneracion);
+      
+      return {
+        ...deuda,
+        diasHastaVencimiento,
+        esHoy: diasHastaVencimiento === 0,
+        esProximo: diasHastaVencimiento >= 0 && diasHastaVencimiento <= 7,
+        estaVencida: diasHastaVencimiento < 0
+      };
+    });
+  } catch (error) {
+    console.error('Error obteniendo deudas con vencimiento:', error);
+    return [];
   }
 };
 

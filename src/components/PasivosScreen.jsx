@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { insertarPasivo, obtenerDatosMes, editarPasivo, eliminarPasivo } from '../utils/database';
+import { 
+  insertarPasivo, 
+  obtenerDatosMes, 
+  editarPasivo, 
+  eliminarPasivo,
+  crearDeudaProgramada,
+  obtenerDeudasProgramadas,
+  editarDeudaProgramada,
+  eliminarDeudaProgramada,
+  toggleDeudaProgramada,
+  obtenerDeudasProgramadasConVencimiento
+} from '../utils/database';
 import { useToast } from '../contexts/ToastContext';
 import { formatearNumeroConSeparadores, removerSeparadores, convertirANumero } from '../utils/formatters';
 
@@ -11,10 +22,28 @@ function PasivosScreen() {
   const [loading, setLoading] = useState(false);
   const [pasivos, setPasivos] = useState([]);
   const [editandoPasivo, setEditandoPasivo] = useState(null);
+  
+  // Estados para deudas programadas
+  const [mostrarDeudaProgramada, setMostrarDeudaProgramada] = useState(false);
+  const [deudasProgramadas, setDeudasProgramadas] = useState([]);
+  const [deudasConVencimiento, setDeudasConVencimiento] = useState([]);
+  const [editandoDeudaProgramada, setEditandoDeudaProgramada] = useState(null);
+  const [formDeudaProgramada, setFormDeudaProgramada] = useState({
+    descripcion: '',
+    categoria: '',
+    valor: '',
+    valorDisplay: '',
+    frecuencia: 'mensual',
+    fechaInicio: '',
+    fechaFin: ''
+  });
+  
   const { showSuccess, showError } = useToast();
 
   useEffect(() => {
     cargarDatos();
+    cargarDeudasProgramadas();
+    cargarDeudasConVencimiento();
   }, []);
 
   const cargarDatos = async () => {
@@ -26,6 +55,24 @@ function PasivosScreen() {
       console.error('Error al cargar datos:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarDeudasProgramadas = async () => {
+    try {
+      const deudas = await obtenerDeudasProgramadas();
+      setDeudasProgramadas(deudas);
+    } catch (error) {
+      console.error('Error al cargar deudas programadas:', error);
+    }
+  };
+
+  const cargarDeudasConVencimiento = async () => {
+    try {
+      const deudasConInfo = await obtenerDeudasProgramadasConVencimiento();
+      setDeudasConVencimiento(deudasConInfo);
+    } catch (error) {
+      console.error('Error al cargar deudas con vencimiento:', error);
     }
   };
 
@@ -110,7 +157,9 @@ function PasivosScreen() {
   };
 
   const calcularTotalPasivos = () => {
-    return pasivos.reduce((total, pasivo) => total + pasivo.valor, 0);
+    const totalPasivosRegulares = pasivos.reduce((total, pasivo) => total + pasivo.valor, 0);
+    const totalDeudasProgramadas = deudasConVencimiento.reduce((total, deuda) => total + deuda.valor, 0);
+    return totalPasivosRegulares + totalDeudasProgramadas;
   };
 
   const formatearMoneda = (monto) => {
@@ -177,6 +226,133 @@ function PasivosScreen() {
     return { categoria: 'Otros', color: 'bg-gray-100 text-gray-800' };
   };
 
+  // Funciones para deudas programadas
+  const manejarCambioFormDeudaProgramada = (campo, valor) => {
+    if (campo === 'valor') {
+      const valorNumerico = removerSeparadores(valor);
+      const valorFormateado = formatearNumeroConSeparadores(valor);
+      setFormDeudaProgramada(prev => ({
+        ...prev,
+        valor: valorNumerico,
+        valorDisplay: valorFormateado
+      }));
+    } else {
+      setFormDeudaProgramada(prev => ({
+        ...prev,
+        [campo]: valor
+      }));
+    }
+  };
+
+  const manejarAgregarDeudaProgramada = async () => {
+    if (!formDeudaProgramada.descripcion || !formDeudaProgramada.categoria || 
+        !formDeudaProgramada.valor || !formDeudaProgramada.fechaInicio) {
+      showError('Por favor completa todos los campos obligatorios');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const deudaData = {
+        descripcion: formDeudaProgramada.descripcion,
+        categoria: formDeudaProgramada.categoria,
+        valor: convertirANumero(formDeudaProgramada.valor),
+        frecuencia: formDeudaProgramada.frecuencia,
+        fechaInicio: formDeudaProgramada.fechaInicio,
+        fechaFin: formDeudaProgramada.fechaFin || null
+      };
+
+      if (editandoDeudaProgramada) {
+        await editarDeudaProgramada(editandoDeudaProgramada.id, deudaData);
+        showSuccess('¡Deuda programada actualizada correctamente!');
+        setEditandoDeudaProgramada(null);
+      } else {
+        await crearDeudaProgramada(deudaData);
+        showSuccess('¡Deuda programada creada correctamente!');
+      }
+
+      setFormDeudaProgramada({
+        descripcion: '',
+        categoria: '',
+        valor: '',
+        valorDisplay: '',
+        frecuencia: 'mensual',
+        fechaInicio: '',
+        fechaFin: ''
+      });
+      setMostrarDeudaProgramada(false);
+      await cargarDeudasProgramadas();
+      await cargarDeudasConVencimiento();
+    } catch (error) {
+      console.error('Error al guardar deuda programada:', error);
+      showError('Error al guardar la deuda programada');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const manejarEditarDeudaProgramada = (deuda) => {
+    setEditandoDeudaProgramada(deuda);
+    setFormDeudaProgramada({
+      descripcion: deuda.descripcion,
+      categoria: deuda.categoria,
+      valor: deuda.valor.toString(),
+      valorDisplay: formatearNumeroConSeparadores(deuda.valor.toString()),
+      frecuencia: deuda.frecuencia,
+      fechaInicio: deuda.fechaInicio,
+      fechaFin: deuda.fechaFin || ''
+    });
+    setMostrarDeudaProgramada(true);
+  };
+
+  const manejarEliminarDeudaProgramada = async (id) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar esta deuda programada?')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await eliminarDeudaProgramada(id);
+      showSuccess('¡Deuda programada eliminada correctamente!');
+      await cargarDeudasProgramadas();
+      await cargarDeudasConVencimiento();
+    } catch (error) {
+      console.error('Error al eliminar deuda programada:', error);
+      showError('Error al eliminar la deuda programada');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const manejarToggleDeudaProgramada = async (id) => {
+    setLoading(true);
+    try {
+      await toggleDeudaProgramada(id);
+      showSuccess('Estado de deuda programada actualizado');
+      await cargarDeudasProgramadas();
+      await cargarDeudasConVencimiento();
+    } catch (error) {
+      console.error('Error al cambiar estado de deuda programada:', error);
+      showError('Error al cambiar el estado');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const manejarCancelarDeudaProgramada = () => {
+    setMostrarDeudaProgramada(false);
+    setEditandoDeudaProgramada(null);
+    setFormDeudaProgramada({
+      descripcion: '',
+      categoria: '',
+      valor: '',
+      valorDisplay: '',
+      frecuencia: 'mensual',
+      fechaInicio: '',
+      fechaFin: ''
+    });
+  };
+
   if (loading && pasivos.length === 0) {
     return (
       <div className="min-h-screen gradient-bg flex items-center justify-center">
@@ -197,14 +373,25 @@ function PasivosScreen() {
             <h1 className="text-2xl font-bold mb-1">Gestionar Pasivos</h1>
             <p className="text-primary-100">Registra y controla tus deudas y obligaciones</p>
           </div>
-          <button
-            onClick={() => navigation.navigate('/')}
-            className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMostrarDeudaProgramada(true)}
+              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Deudas Programadas
+            </button>
+            <button
+              onClick={() => navigation.navigate('/')}
+              className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -327,7 +514,7 @@ function PasivosScreen() {
               </div>
             </div>
 
-            {pasivos.length === 0 ? (
+            {pasivos.length === 0 && deudasConVencimiento.length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-16 h-16 bg-success-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -341,6 +528,76 @@ function PasivosScreen() {
               </div>
             ) : (
               <div className="space-y-0 rounded-lg overflow-hidden my-2 flex flex-col items-center gap-2">
+                {/* Deudas programadas con vencimiento */}
+                {deudasConVencimiento.map((deuda, index) => {
+                  const categoria = deuda.categoria || 'Deuda Programada';
+                  let colorCategoria = 'bg-blue-100 text-blue-800';
+                  let indicadorVencimiento = '';
+                  let colorIndicador = '';
+                  
+                  if (deuda.esHoy) {
+                    colorCategoria = 'bg-red-100 text-red-800';
+                    indicadorVencimiento = '¡VENCE HOY!';
+                    colorIndicador = 'bg-red-500 text-white animate-pulse';
+                  } else if (deuda.esProximo) {
+                    colorCategoria = 'bg-yellow-100 text-yellow-800';
+                    indicadorVencimiento = `Vence en ${deuda.diasHastaVencimiento} día(s)`;
+                    colorIndicador = 'bg-yellow-500 text-white';
+                  } else if (deuda.estaVencida) {
+                    colorCategoria = 'bg-red-100 text-red-800';
+                    indicadorVencimiento = `Vencida hace ${Math.abs(deuda.diasHastaVencimiento)} día(s)`;
+                    colorIndicador = 'bg-red-600 text-white';
+                  }
+                  
+                  return (
+                    <div key={`deuda-${deuda.id}-${index}`} className="flex bg-gradient-to-r from-blue-50 to-indigo-50 w-full py-4 px-4 rounded-lg shadow border-l-4 border-blue-500 justify-between items-center">
+                      <div className="flex items-center flex-1">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3 text-blue-600">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-medium text-gray-800">{deuda.descripcion}</h3>
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${colorCategoria}`}>
+                              {categoria}
+                            </span>
+                            <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                              Programada
+                            </span>
+                            {indicadorVencimiento && (
+                              <span className={`px-2 py-1 text-xs font-bold rounded-full ${colorIndicador}`}>
+                                {indicadorVencimiento}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500">
+                            Próximo vencimiento: {new Date(deuda.proximaGeneracion).toLocaleDateString('es-CO', {
+                              day: 'numeric',
+                              month: 'long',
+                              year: 'numeric'
+                            })} • Frecuencia: {deuda.frecuencia}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-right mr-2">
+                          <p className="font-semibold value-negative">
+                            {formatearMoneda(deuda.valor)}
+                          </p>
+                        </div>
+                        <div className="w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                
+                {/* Pasivos regulares */}
                 {pasivos.map((pasivo, index) => {
                   const categoria = pasivo.categoria || obtenerCategoriaPasivo(pasivo.descripcion).categoria;
                   const colorCategoria = obtenerCategoriaPasivo(pasivo.descripcion).color;
@@ -474,6 +731,218 @@ function PasivosScreen() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Deudas Programadas */}
+      {mostrarDeudaProgramada && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {editandoDeudaProgramada ? 'Editar Deuda Programada' : 'Gestionar Deudas Programadas'}
+                </h2>
+                <button
+                  onClick={manejarCancelarDeudaProgramada}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Formulario */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    {editandoDeudaProgramada ? 'Editar Deuda' : 'Nueva Deuda Programada'}
+                  </h3>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Descripción *
+                    </label>
+                    <input
+                      type="text"
+                      value={formDeudaProgramada.descripcion}
+                      onChange={(e) => manejarCambioFormDeudaProgramada('descripcion', e.target.value)}
+                      className="input-field"
+                      placeholder="Ej: Cuota hipoteca casa"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Categoría *
+                    </label>
+                    <select
+                      value={formDeudaProgramada.categoria}
+                      onChange={(e) => manejarCambioFormDeudaProgramada('categoria', e.target.value)}
+                      className="input-field"
+                    >
+                      <option value="">Selecciona una categoría</option>
+                      <option value="Hipoteca">Hipoteca</option>
+                      <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
+                      <option value="Préstamo">Préstamo</option>
+                      <option value="Vehículo">Vehículo</option>
+                      <option value="Servicios">Servicios</option>
+                      <option value="Otros">Otros</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Valor *
+                    </label>
+                    <input
+                      type="text"
+                      value={formDeudaProgramada.valorDisplay}
+                      onChange={(e) => manejarCambioFormDeudaProgramada('valor', e.target.value)}
+                      className="input-field"
+                      placeholder="Ej: 1,500,000"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Frecuencia
+                    </label>
+                    <select
+                      value={formDeudaProgramada.frecuencia}
+                      onChange={(e) => manejarCambioFormDeudaProgramada('frecuencia', e.target.value)}
+                      className="input-field"
+                    >
+                      <option value="mensual">Mensual</option>
+                      <option value="bimestral">Bimestral</option>
+                      <option value="trimestral">Trimestral</option>
+                      <option value="semestral">Semestral</option>
+                      <option value="anual">Anual</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Fecha de Inicio *
+                    </label>
+                    <input
+                      type="date"
+                      value={formDeudaProgramada.fechaInicio}
+                      onChange={(e) => manejarCambioFormDeudaProgramada('fechaInicio', e.target.value)}
+                      className="input-field"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Fecha de Fin (Opcional)
+                    </label>
+                    <input
+                      type="date"
+                      value={formDeudaProgramada.fechaFin}
+                      onChange={(e) => manejarCambioFormDeudaProgramada('fechaFin', e.target.value)}
+                      className="input-field"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={manejarAgregarDeudaProgramada}
+                      disabled={loading || !formDeudaProgramada.descripcion || !formDeudaProgramada.categoria || 
+                               !formDeudaProgramada.valor || !formDeudaProgramada.fechaInicio}
+                      className="btn-primary flex-1"
+                    >
+                      {loading ? 'Guardando...' : (editandoDeudaProgramada ? 'Actualizar' : 'Crear Deuda')}
+                    </button>
+                    <button
+                      onClick={manejarCancelarDeudaProgramada}
+                      className="btn-secondary"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Lista de deudas programadas */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Deudas Programadas Existentes</h3>
+                  
+                  {deudasProgramadas.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p>No hay deudas programadas</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {deudasProgramadas.map((deuda) => (
+                        <div key={deuda.id} className={`p-4 rounded-lg border ${deuda.activa ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-300'}`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h4 className={`font-medium ${deuda.activa ? 'text-gray-800' : 'text-gray-500'}`}>
+                                  {deuda.descripcion}
+                                </h4>
+                                <span className={`px-2 py-1 text-xs rounded-full ${
+                                  deuda.activa ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {deuda.activa ? 'Activa' : 'Inactiva'}
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-600 space-y-1">
+                                <p><span className="font-medium">Categoría:</span> {deuda.categoria}</p>
+                                <p><span className="font-medium">Valor:</span> {formatearMoneda(deuda.valor)}</p>
+                                <p><span className="font-medium">Frecuencia:</span> {deuda.frecuencia}</p>
+                                <p><span className="font-medium">Próxima generación:</span> {new Date(deuda.proximaGeneracion).toLocaleDateString()}</p>
+                                {deuda.fechaFin && (
+                                  <p><span className="font-medium">Fecha fin:</span> {new Date(deuda.fechaFin).toLocaleDateString()}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                              <button
+                                onClick={() => manejarToggleDeudaProgramada(deuda.id)}
+                                className={`p-2 rounded-lg transition-colors ${
+                                  deuda.activa 
+                                    ? 'text-green-600 hover:bg-green-50' 
+                                    : 'text-gray-400 hover:bg-gray-100'
+                                }`}
+                                title={deuda.activa ? 'Desactivar' : 'Activar'}
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => manejarEditarDeudaProgramada(deuda)}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Editar"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => manejarEliminarDeudaProgramada(deuda.id)}
+                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Eliminar"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
