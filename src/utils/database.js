@@ -174,7 +174,7 @@ export const insertarActivo = async (descripcion, valor) => {
 };
 
 // Insertar un nuevo pasivo
-export const insertarPasivo = async (descripcion, valor) => {
+export const insertarPasivo = async (descripcion, valor, tipoPasivo = '') => {
   try {
     if (!descripcion || valor <= 0) {
       throw new Error('Descripción y valor son requeridos');
@@ -196,7 +196,8 @@ export const insertarPasivo = async (descripcion, valor) => {
       descripcion: descripcion.trim(),
       valor: parseFloat(valor),
       fecha: new Date().toISOString(),
-      tipo: 'pasivo'
+      tipo: 'pasivo',
+      categoria: tipoPasivo
     };
     
     datos.meses[numeroMes].pasivos.push(nuevoPasivo);
@@ -366,7 +367,7 @@ export const eliminarActivo = async (id) => {
 };
 
 // Editar pasivo
-export const editarPasivo = async (id, descripcion, valor) => {
+export const editarPasivo = async (id, descripcion, valor, tipoPasivo = '') => {
   try {
     const datos = obtenerDatosStorage();
     const numeroMes = obtenerNumeroMes();
@@ -384,6 +385,7 @@ export const editarPasivo = async (id, descripcion, valor) => {
       ...datos.meses[numeroMes].pasivos[pasivoIndex],
       descripcion,
       valor: parseFloat(valor),
+      categoria: tipoPasivo,
       fechaModificacion: new Date().toISOString()
     };
     

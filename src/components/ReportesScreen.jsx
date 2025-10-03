@@ -9,6 +9,21 @@ import {
   obtenerTendenciasMeses
 } from '../utils/database';
 import { Link, useNavigate } from 'react-router-dom';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line
+} from 'recharts';
 
 function ReportesScreen() {
   const navigate = useNavigate();
@@ -119,7 +134,7 @@ function ReportesScreen() {
   };
 
   const calcularTotalIngresos = () => {
-    return datos.ingresos.reduce((total, ingreso) => total + ingreso.monto, 0);
+    return datos.ingresos.reduce((total, ingreso) => total + ingreso.valor, 0);
   };
 
   const calcularTotalActivos = () => {
@@ -135,10 +150,57 @@ function ReportesScreen() {
   };
 
   const calcularLiquidezDisponible = () => {
-    const activosLiquidos = datos.activos
+    if (!datos || !datos.activos) return 0;
+    return datos.activos
       .filter(activo => activo.tipo === 'efectivo' || activo.tipo === 'cuenta_bancaria')
-      .reduce((total, activo) => total + activo.valor, 0);
-    return activosLiquidos;
+      .reduce((total, activo) => total + (activo.valor || 0), 0);
+  };
+
+  // Función para categorizar pasivos y calcular distribución
+  const obtenerCategoriaPasivo = (descripcion) => {
+    const desc = descripcion.toLowerCase();
+    if (desc.includes('hipoteca') || desc.includes('casa') || desc.includes('vivienda')) {
+      return 'Hipoteca';
+    } else if (desc.includes('tarjeta') || desc.includes('crédito')) {
+      return 'Tarjeta de Crédito';
+    } else if (desc.includes('préstamo') || desc.includes('banco')) {
+      return 'Préstamo';
+    } else if (desc.includes('carro') || desc.includes('auto') || desc.includes('vehículo')) {
+      return 'Vehículo';
+    } else if (desc.includes('servicio') || desc.includes('factura') || desc.includes('cuenta')) {
+      return 'Servicios';
+    }
+    return 'Otros';
+  };
+
+  const calcularDistribucionPasivos = () => {
+    if (!datos || !datos.pasivos) return [];
+    
+    const distribucion = {};
+    datos.pasivos.forEach(pasivo => {
+      const categoria = obtenerCategoriaPasivo(pasivo.descripcion);
+      if (!distribucion[categoria]) {
+        distribucion[categoria] = 0;
+      }
+      distribucion[categoria] += pasivo.valor || 0;
+    });
+
+    const colores = {
+      'Hipoteca': '#ef4444',
+      'Tarjeta de Crédito': '#f97316',
+      'Préstamo': '#3b82f6',
+      'Vehículo': '#10b981',
+      'Servicios': '#eab308',
+      'Otros': '#6b7280'
+    };
+
+    return Object.entries(distribucion)
+      .filter(([_, valor]) => valor > 0)
+      .map(([categoria, valor]) => ({
+        name: categoria,
+        value: valor,
+        fill: colores[categoria] || '#6b7280'
+      }));
   };
 
   const formatearMoneda = (valor) => {
@@ -190,6 +252,138 @@ function ReportesScreen() {
             <div className="metric-card bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200">
               <h3 className="text-sm font-medium text-purple-800 mb-2">Liquidez Disponible</h3>
               <p className="text-2xl font-bold text-purple-900">{formatearMoneda(calcularLiquidezDisponible())}</p>
+            </div>
+          </div>
+
+          {/* Sección de Gráficas */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+            {/* Gráfica de Ingresos vs Gastos */}
+            <div className="card">
+              <h3 className="text-xl font-bold text-gray-800 mb-6">Ingresos vs Gastos</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={[
+                    {
+                      name: 'Finanzas Actuales',
+                      Ingresos: calcularTotalIngresos(),
+                      Gastos: calcularTotalPasivos(),
+                      Activos: calcularTotalActivos()
+                    }
+                  ]}
+                  margin={{
+                    top: 20,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`} />
+                  <Tooltip 
+                    formatter={(value) => [`$${value.toLocaleString('es-CO')}`, '']}
+                    labelFormatter={() => ''}
+                  />
+                  <Legend />
+                  <Bar dataKey="Ingresos" fill="#10b981" />
+                  <Bar dataKey="Gastos" fill="#ef4444" />
+                  <Bar dataKey="Activos" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Gráfica de Distribución de Gastos por Categoría */}
+            <div className="card">
+              <h3 className="text-xl font-bold text-gray-800 mb-6">Distribución de Gastos por Categoría</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={calcularDistribucionPasivos()}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {calcularDistribucionPasivos().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `$${value.toLocaleString('es-CO')}`} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Segunda fila de gráficas */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+            {/* Gráfica de Distribución Patrimonial */}
+            <div className="card">
+              <h3 className="text-xl font-bold text-gray-800 mb-6">Distribución Patrimonial</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'Activos', value: calcularTotalActivos(), fill: '#10b981' },
+                      { name: 'Pasivos', value: calcularTotalPasivos(), fill: '#ef4444' },
+                      { name: 'Patrimonio Neto', value: Math.max(0, calcularPatrimonioNeto()), fill: '#3b82f6' }
+                    ].filter(item => item.value > 0)}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {[
+                      { name: 'Activos', value: calcularTotalActivos(), fill: '#10b981' },
+                      { name: 'Pasivos', value: calcularTotalPasivos(), fill: '#ef4444' },
+                      { name: 'Patrimonio Neto', value: Math.max(0, calcularPatrimonioNeto()), fill: '#3b82f6' }
+                    ].filter(item => item.value > 0).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `$${value.toLocaleString('es-CO')}`} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Gráfica de Liquidez vs Compromisos */}
+            <div className="card">
+              <h3 className="text-xl font-bold text-gray-800 mb-6">Liquidez vs Compromisos</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={[
+                    {
+                      name: 'Estado Actual',
+                      'Liquidez Disponible': calcularLiquidezDisponible(),
+                      'Total Pasivos': calcularTotalPasivos(),
+                      'Patrimonio Neto': Math.max(0, calcularPatrimonioNeto())
+                    }
+                  ]}
+                  margin={{
+                    top: 20,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`} />
+                  <Tooltip 
+                    formatter={(value) => [`$${value.toLocaleString('es-CO')}`, '']}
+                    labelFormatter={() => ''}
+                  />
+                  <Legend />
+                  <Bar dataKey="Liquidez Disponible" fill="#06b6d4" />
+                  <Bar dataKey="Total Pasivos" fill="#ef4444" />
+                  <Bar dataKey="Patrimonio Neto" fill="#8b5cf6" />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { insertarActivo, obtenerDatosMes, editarActivo, eliminarActivo } from '../utils/database';
 import { useToast } from '../contexts/ToastContext';
+import { formatearNumeroConSeparadores, removerSeparadores, convertirANumero } from '../utils/formatters';
 
 function ActivosScreen() {
   const [descripcionActivo, setDescripcionActivo] = useState('');
   const [valorActivo, setValorActivo] = useState('');
+  const [valorActivoDisplay, setValorActivoDisplay] = useState('');
   const [loading, setLoading] = useState(false);
   const [activos, setActivos] = useState([]);
   const [editandoActivo, setEditandoActivo] = useState(null);
@@ -24,6 +26,14 @@ function ActivosScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const manejarCambioValor = (e) => {
+    const inputValue = e.target.value;
+    const numeroLimpio = removerSeparadores(inputValue);
+    
+    setValorActivo(numeroLimpio);
+    setValorActivoDisplay(formatearNumeroConSeparadores(numeroLimpio));
   };
 
   const manejarAgregarActivo = async () => {
@@ -54,6 +64,7 @@ function ActivosScreen() {
       await cargarDatos();
       setDescripcionActivo('');
       setValorActivo('');
+      setValorActivoDisplay('');
     } catch (error) {
       console.error('Error al procesar activo:', error);
       showError(editandoActivo ? 'Error al actualizar el activo' : 'Error al agregar el activo');
@@ -66,12 +77,14 @@ function ActivosScreen() {
     setEditandoActivo(activo);
     setDescripcionActivo(activo.descripcion);
     setValorActivo(activo.valor.toString());
+    setValorActivoDisplay(formatearNumeroConSeparadores(activo.valor.toString()));
   };
 
   const manejarCancelarEdicion = () => {
     setEditandoActivo(null);
     setDescripcionActivo('');
     setValorActivo('');
+    setValorActivoDisplay('');
   };
 
   const manejarEliminarActivo = async (id) => {
@@ -210,14 +223,12 @@ function ActivosScreen() {
                     $
                   </span>
                   <input
-                    type="number"
-                    value={valorActivo}
-                    onChange={(e) => setValorActivo(e.target.value)}
+                    type="text"
+                    value={valorActivoDisplay}
+                    onChange={manejarCambioValor}
                     placeholder="0"
                     className="input-field pl-8 w-full px-4 py-2 bg-white/80 shadow rounded-lg"
                     disabled={loading}
-                    min="0"
-                    step="100000"
                   />
                 </div>
                 <p className="text-sm text-gray-500 mt-2">
@@ -278,10 +289,10 @@ function ActivosScreen() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-0 border border-gray-200 rounded-lg overflow-hidden">
+              <div className="space-y-0 rounded-lg overflow-hidden my-2 flex flex-col items-center gap-2">
                 {activos.map((activo, index) => (
-                  <div key={activo.id || index} className="list-item">
-                    <div className="flex items-center flex-1">
+                  <div key={activo.id || index} className="flex bg-white w-full py-4 px-4 rounded-lg shadow justify-between items-center">
+                    <div className="flex">
                       <div className="w-10 h-10 bg-accent-100 rounded-lg flex items-center justify-center mr-3 text-accent-600">
                         {obtenerIconoActivo(activo.descripcion)}
                       </div>

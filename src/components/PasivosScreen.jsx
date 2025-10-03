@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { insertarPasivo, obtenerDatosMes, editarPasivo, eliminarPasivo } from '../utils/database';
 import { useToast } from '../contexts/ToastContext';
+import { formatearNumeroConSeparadores, removerSeparadores, convertirANumero } from '../utils/formatters';
 
 function PasivosScreen() {
   const [descripcionPasivo, setDescripcionPasivo] = useState('');
   const [valorPasivo, setValorPasivo] = useState('');
+  const [valorPasivoDisplay, setValorPasivoDisplay] = useState('');
+  const [tipoPasivo, setTipoPasivo] = useState('');
   const [loading, setLoading] = useState(false);
   const [pasivos, setPasivos] = useState([]);
   const [editandoPasivo, setEditandoPasivo] = useState(null);
@@ -26,8 +29,16 @@ function PasivosScreen() {
     }
   };
 
+  const manejarCambioValor = (e) => {
+    const inputValue = e.target.value;
+    const numeroLimpio = removerSeparadores(inputValue);
+    
+    setValorPasivo(numeroLimpio);
+    setValorPasivoDisplay(formatearNumeroConSeparadores(numeroLimpio));
+  };
+
   const manejarAgregarPasivo = async () => {
-    if (!descripcionPasivo || !valorPasivo) {
+    if (!descripcionPasivo || !valorPasivo || !tipoPasivo) {
       showError('Por favor, completa todos los campos');
       return;
     }
@@ -42,18 +53,20 @@ function PasivosScreen() {
       setLoading(true);
       if (editandoPasivo) {
         // Editar pasivo existente
-        await editarPasivo(editandoPasivo.id, descripcionPasivo, valor);
+        await editarPasivo(editandoPasivo.id, descripcionPasivo, valor, tipoPasivo);
         showSuccess('¡Pasivo actualizado correctamente!');
         setEditandoPasivo(null);
       } else {
         // Agregar nuevo pasivo
-        await insertarPasivo(descripcionPasivo, valor);
+        await insertarPasivo(descripcionPasivo, valor, tipoPasivo);
         showSuccess('¡Pasivo agregado correctamente!');
       }
       
       await cargarDatos();
       setDescripcionPasivo('');
       setValorPasivo('');
+      setValorPasivoDisplay('');
+      setTipoPasivo('');
     } catch (error) {
       console.error('Error al procesar pasivo:', error);
       showError(editandoPasivo ? 'Error al actualizar el pasivo' : 'Error al agregar el pasivo');
@@ -66,12 +79,16 @@ function PasivosScreen() {
     setEditandoPasivo(pasivo);
     setDescripcionPasivo(pasivo.descripcion);
     setValorPasivo(pasivo.valor.toString());
+    setValorPasivoDisplay(formatearNumeroConSeparadores(pasivo.valor.toString()));
+    setTipoPasivo(pasivo.categoria || '');
   };
 
   const manejarCancelarEdicion = () => {
     setEditandoPasivo(null);
     setDescripcionPasivo('');
     setValorPasivo('');
+    setValorPasivoDisplay('');
+    setTipoPasivo('');
   };
 
   const manejarEliminarPasivo = async (id) => {
@@ -225,6 +242,29 @@ function PasivosScreen() {
 
               <div>
                 <label className="label-field block mb-2">
+                  Tipo de Gasto
+                </label>
+                <select
+                  value={tipoPasivo}
+                  onChange={(e) => setTipoPasivo(e.target.value)}
+                  className="input-field w-full px-4 py-2 shadow rounded-lg bg-white/80"
+                  disabled={loading}
+                >
+                  <option value="">Selecciona el tipo de gasto</option>
+                  <option value="Hipoteca">Hipoteca</option>
+                  <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
+                  <option value="Préstamo">Préstamo</option>
+                  <option value="Vehículo">Vehículo</option>
+                  <option value="Servicios">Servicios</option>
+                  <option value="Otros">Otros</option>
+                </select>
+                <p className="text-sm text-gray-500 mt-2">
+                  Selecciona la categoría que mejor describe este gasto
+                </p>
+              </div>
+
+              <div>
+                <label className="label-field block mb-2">
                   Valor de la deuda (COP)
                 </label>
                 <div className="relative">
@@ -232,14 +272,12 @@ function PasivosScreen() {
                     $
                   </span>
                   <input
-                    type="number"
-                    value={valorPasivo}
-                    onChange={(e) => setValorPasivo(e.target.value)}
+                    type="text"
+                    value={valorPasivoDisplay}
+                    onChange={manejarCambioValor}
                     placeholder="0"
                     className="input-field pl-8 w-full px-4 py-2 shadow rounded-lg bg-white/80"
                     disabled={loading}
-                    min="0"
-                    step="50000"
                   />
                 </div>
                 <p className="text-sm text-gray-500 mt-2">
@@ -249,7 +287,7 @@ function PasivosScreen() {
 
               <button
                 onClick={manejarAgregarPasivo}
-                disabled={loading || !descripcionPasivo || !valorPasivo}
+                disabled={loading || !descripcionPasivo || !valorPasivo || !tipoPasivo}
                 className="btn-success w-full text-lg"
               >
                 {loading ? (
@@ -302,11 +340,12 @@ function PasivosScreen() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-0 border border-gray-200 rounded-lg overflow-hidden">
+              <div className="space-y-0 rounded-lg overflow-hidden my-2 flex flex-col items-center gap-2">
                 {pasivos.map((pasivo, index) => {
-                  const categoria = obtenerCategoriaPasivo(pasivo.descripcion);
+                  const categoria = pasivo.categoria || obtenerCategoriaPasivo(pasivo.descripcion).categoria;
+                  const colorCategoria = obtenerCategoriaPasivo(pasivo.descripcion).color;
                   return (
-                    <div key={pasivo.id || index} className="list-item">
+                    <div key={pasivo.id || index} className="flex bg-white w-full py-4 px-4 rounded-lg shadow justify-between items-center">
                       <div className="flex items-center flex-1">
                         <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center mr-3 text-red-600">
                           {obtenerIconoPasivo(pasivo.descripcion)}
@@ -314,8 +353,8 @@ function PasivosScreen() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-medium text-gray-800">{pasivo.descripcion}</h3>
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${categoria.color}`}>
-                              {categoria.categoria}
+                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${colorCategoria}`}>
+                              {categoria}
                             </span>
                           </div>
                           <p className="text-sm text-gray-500">

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { inicializarMes, insertarIngreso, obtenerDatosMes, mesEstaInicializado, editarIngreso, eliminarIngreso } from '../utils/database';
 import { useToast } from '../contexts/ToastContext';
+import { formatearNumeroConSeparadores, removerSeparadores, convertirANumero } from '../utils/formatters';
 
 function IniciarMesScreen() {
   const [montoIngreso, setMontoIngreso] = useState('');
+  const [montoIngresoDisplay, setMontoIngresoDisplay] = useState('');
   const [descripcionIngreso, setDescripcionIngreso] = useState('');
   const [loading, setLoading] = useState(false);
   const [ingresos, setIngresos] = useState([]);
@@ -32,6 +34,14 @@ function IniciarMesScreen() {
     }
   };
 
+  const manejarCambioMonto = (e) => {
+    const inputValue = e.target.value;
+    const numeroLimpio = removerSeparadores(inputValue);
+    
+    setMontoIngreso(numeroLimpio);
+    setMontoIngresoDisplay(formatearNumeroConSeparadores(numeroLimpio));
+  };
+
   const manejarInicializarMes = async () => {
     if (!montoIngreso || !descripcionIngreso) {
       showError('Por favor, completa todos los campos');
@@ -49,6 +59,7 @@ function IniciarMesScreen() {
       await inicializarMes(monto, descripcionIngreso);
       await cargarDatos();
       setMontoIngreso('');
+      setMontoIngresoDisplay('');
       setDescripcionIngreso('');
       showSuccess('¡Mes inicializado correctamente!');
     } catch (error) {
@@ -86,6 +97,7 @@ function IniciarMesScreen() {
       
       await cargarDatos();
       setMontoIngreso('');
+      setMontoIngresoDisplay('');
       setDescripcionIngreso('');
     } catch (error) {
       console.error('Error al procesar ingreso:', error);
@@ -98,13 +110,15 @@ function IniciarMesScreen() {
   const manejarEditarIngreso = (ingreso) => {
     setEditandoIngreso(ingreso);
     setDescripcionIngreso(ingreso.descripcion);
-    setMontoIngreso(ingreso.monto.toString());
+    setMontoIngreso(ingreso.valor.toString());
+    setMontoIngresoDisplay(formatearNumeroConSeparadores(ingreso.valor.toString()));
   };
 
   const manejarCancelarEdicion = () => {
     setEditandoIngreso(null);
     setDescripcionIngreso('');
     setMontoIngreso('');
+    setMontoIngresoDisplay('');
   };
 
   const manejarEliminarIngreso = async (id) => {
@@ -216,14 +230,12 @@ function IniciarMesScreen() {
                     $
                   </span>
                   <input
-                    type="number"
-                    value={montoIngreso}
-                    onChange={(e) => setMontoIngreso(e.target.value)}
+                    type="text"
+                    value={montoIngresoDisplay}
+                    onChange={manejarCambioMonto}
                     placeholder="0"
                     className="input-field pl-8 w-full px-4 py-2 bg-white/80 shadow rounded-lg"
                     disabled={loading}
-                    min="0"
-                    step="1000"
                   />
                 </div>
               </div>
@@ -286,8 +298,8 @@ function IniciarMesScreen() {
             ) : (
               <div className="space-y-0 rounded-lg overflow-hidden my-2 flex flex-col items-center gap-2">
                 {ingresos.map((ingreso, index) => (
-                  <div key={ingreso.id || index} className="flex bg-white w-full py-4 px-4 rounded-lg shadow">
-                    <div className="flex-1 w-1/2">
+                  <div key={ingreso.id || index} className="flex bg-white w-full py-4 px-4 rounded-lg shadow justify-between items-center">
+                    <div className="flex-1">
                       <h3 className="font-medium text-gray-800">{ingreso.descripcion}</h3>
                       <p className="text-sm text-gray-500">
                         {new Date(ingreso.fecha).toLocaleDateString('es-CO', {
