@@ -7,6 +7,7 @@ const estructuraInicial = {
   meses: {},
   reportes: {}, // Nueva estructura para almacenar reportes históricos
   deudasProgramadas: {}, // Nueva estructura para deudas programadas
+  prestamosOtorgados: {}, // Nueva estructura para préstamos otorgados
   configuracion: {
     version: '1.0.0',
     fechaCreacion: new Date().toISOString()
@@ -422,31 +423,7 @@ export const eliminarPasivo = async (id) => {
   }
 };
 
-// Exportar datos para respaldo
-export const exportarDatos = async () => {
-  try {
-    const datos = obtenerDatosStorage();
-    return JSON.stringify(datos, null, 2);
-  } catch (error) {
-    console.error('Error exportando datos:', error);
-    throw error;
-  }
-};
-
-// Importar datos desde respaldo
-export const importarDatos = async (datosJSON) => {
-  try {
-    const datos = JSON.parse(datosJSON);
-    const guardado = guardarDatosStorage(datos);
-    if (!guardado) {
-      throw new Error('No se pudieron importar los datos');
-    }
-    return true;
-  } catch (error) {
-    console.error('Error importando datos:', error);
-    throw error;
-  }
-};
+// Funciones de importación/exportación movidas al final del archivo
 
 // Obtener estadísticas generales
 export const obtenerEstadisticas = async () => {
@@ -1004,6 +981,657 @@ export const obtenerDeudasProgramadasConVencimiento = async () => {
   } catch (error) {
     console.error('Error obteniendo deudas con vencimiento:', error);
     return [];
+  }
+};
+
+// ==================== FUNCIONES DE EXPORTACIÓN E IMPORTACIÓN ====================
+
+// Exportar todos los datos a JSON
+export const exportarDatos = () => {
+  try {
+    const datos = obtenerDatosStorage();
+    const fechaExportacion = new Date().toISOString();
+    
+    const datosExportacion = {
+      version: "1.0",
+      fechaExportacion,
+      aplicacion: "Finanzas Personales",
+      datos: {
+        ...datos,
+        metadatos: {
+          totalMeses: Object.keys(datos.meses || {}).length,
+          fechaUltimaModificacion: fechaExportacion
+        }
+      }
+    };
+
+    const jsonString = JSON.stringify(datosExportacion, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `finanzas-personales-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    return true;
+  } catch (error) {
+    console.error('Error exportando datos:', error);
+    throw new Error('Error al exportar los datos');
+  }
+};
+
+// Validar estructura de datos importados
+const validarEstructuraDatos = (datos) => {
+  if (!datos || typeof datos !== 'object') {
+    throw new Error('Formato de archivo inválido');
+  }
+
+  if (!datos.datos) {
+    throw new Error('El archivo no contiene datos válidos');
+  }
+
+  const { datos: datosImportados } = datos;
+
+  // Validar estructura básica
+  if (!datosImportados.meses || typeof datosImportados.meses !== 'object') {
+    throw new Error('Estructura de meses inválida');
+  }
+
+  // Validar cada mes
+  Object.entries(datosImportados.meses).forEach(([mesId, datosMes]) => {
+    if (!datosMes || typeof datosMes !== 'object') {
+      throw new Error(`Datos del mes ${mesId} inválidos`);
+    }
+
+    // Validar arrays requeridos
+    const arraysCampos = ['ingresos', 'activos', 'pasivos'];
+    arraysCampos.forEach(campo => {
+      if (!Array.isArray(datosMes[campo])) {
+        throw new Error(`Campo ${campo} del mes ${mesId} debe ser un array`);
+      }
+    });
+
+    // Validar deudas programadas si existen
+    if (datosMes.deudasProgramadas && !Array.isArray(datosMes.deudasProgramadas)) {
+      throw new Error(`Campo deudasProgramadas del mes ${mesId} debe ser un array`);
+    }
+  });
+
+  return true;
+};
+
+// Importar datos desde archivo JSON
+export const importarDatos = (archivo, sobreescribir = false) => {
+  return new Promise((resolve, reject) => {
+    if (!archivo) {
+      reject(new Error('No se seleccionó ningún archivo'));
+      return;
+    }
+
+    if (archivo.type !== 'application/json' && !archivo.name.endsWith('.json')) {
+      reject(new Error('El archivo debe ser de tipo JSON'));
+      return;
+    }
+
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const contenido = e.target.result;
+        const datosImportados = JSON.parse(contenido);
+        
+        // Validar estructura
+        validarEstructuraDatos(datosImportados);
+        
+        // Obtener datos actuales
+        const datosActuales = obtenerDatosStorage();
+        
+        let datosFinales;
+        
+        if (sobreescribir) {
+          // Sobreescribir completamente
+          datosFinales = {
+            ...datosImportados.datos,
+            configuracion: {
+              ...datosImportados.datos.configuracion,
+              fechaImportacion: new Date().toISOString()
+            }
+          };
+        } else {
+          // Fusionar datos
+          datosFinales = {
+            ...datosActuales,
+            meses: {
+              ...datosActuales.meses,
+              ...datosImportados.datos.meses
+            },
+            configuracion: {
+              ...datosActuales.configuracion,
+              ...datosImportados.datos.configuracion,
+              fechaImportacion: new Date().toISOString()
+            }
+          };
+          
+          // Fusionar deudas programadas si existen
+          if (datosImportados.datos.deudasProgramadas) {
+            datosFinales.deudasProgramadas = {
+              ...datosActuales.deudasProgramadas,
+              ...datosImportados.datos.deudasProgramadas
+            };
+          }
+        }
+        
+        // Guardar datos fusionados
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(datosFinales));
+        
+        resolve({
+          exito: true,
+          mensaje: sobreescribir ? 'Datos importados y reemplazados correctamente' : 'Datos importados y fusionados correctamente',
+          estadisticas: {
+            mesesImportados: Object.keys(datosImportados.datos.meses || {}).length,
+            deudasProgramadasImportadas: Object.keys(datosImportados.datos.deudasProgramadas || {}).length,
+            fechaImportacion: new Date().toISOString()
+          }
+        });
+        
+      } catch (error) {
+        console.error('Error procesando archivo:', error);
+        reject(new Error(`Error al procesar el archivo: ${error.message}`));
+      }
+    };
+    
+    reader.onerror = () => {
+      reject(new Error('Error al leer el archivo'));
+    };
+    
+    reader.readAsText(archivo);
+  });
+};
+
+// Crear respaldo automático
+export const crearRespaldo = () => {
+  try {
+    const datos = obtenerDatosStorage();
+    const fechaRespaldo = new Date().toISOString();
+    
+    const respaldo = {
+      version: "1.0",
+      tipo: "respaldo_automatico",
+      fechaCreacion: fechaRespaldo,
+      datos
+    };
+    
+    const respaldosExistentes = JSON.parse(localStorage.getItem('finanzas_respaldos') || '[]');
+    respaldosExistentes.push(respaldo);
+    
+    // Mantener solo los últimos 5 respaldos
+    if (respaldosExistentes.length > 5) {
+      respaldosExistentes.splice(0, respaldosExistentes.length - 5);
+    }
+    
+    localStorage.setItem('finanzas_respaldos', JSON.stringify(respaldosExistentes));
+    return true;
+  } catch (error) {
+    console.error('Error creando respaldo:', error);
+    return false;
+  }
+};
+
+// Obtener lista de respaldos
+export const obtenerRespaldos = () => {
+  try {
+    return JSON.parse(localStorage.getItem('finanzas_respaldos') || '[]');
+  } catch (error) {
+    console.error('Error obteniendo respaldos:', error);
+    return [];
+  }
+};
+
+// Restaurar desde respaldo
+export const restaurarRespaldo = (indiceRespaldo) => {
+  try {
+    const respaldos = obtenerRespaldos();
+    if (indiceRespaldo < 0 || indiceRespaldo >= respaldos.length) {
+      throw new Error('Respaldo no encontrado');
+    }
+    
+    const respaldo = respaldos[indiceRespaldo];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(respaldo.datos));
+    
+    return {
+      exito: true,
+      mensaje: 'Respaldo restaurado correctamente',
+      fechaRespaldo: respaldo.fechaCreacion
+    };
+  } catch (error) {
+    console.error('Error restaurando respaldo:', error);
+    throw new Error('Error al restaurar el respaldo');
+  }
+};
+
+// ==================== FUNCIONES DE PRÉSTAMOS OTORGADOS ====================
+
+// Generar ID único para préstamos
+const generarIdPrestamo = () => {
+  return 'prestamo_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+};
+
+// Crear nuevo préstamo otorgado
+export const crearPrestamoOtorgado = (datosPrestamo) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    const id = generarIdPrestamo();
+    
+    // Verificar que el mes esté inicializado
+    if (!datos.meses[numeroMes]) {
+      throw new Error('El mes no está inicializado');
+    }
+    
+    const prestamo = {
+      id,
+      montoPrestado: parseFloat(datosPrestamo.montoPrestado),
+      montoARecibir: parseFloat(datosPrestamo.montoARecibir),
+      ganancia: parseFloat(datosPrestamo.montoARecibir) - parseFloat(datosPrestamo.montoPrestado),
+      porcentajeGanancia: ((parseFloat(datosPrestamo.montoARecibir) - parseFloat(datosPrestamo.montoPrestado)) / parseFloat(datosPrestamo.montoPrestado)) * 100,
+      persona: datosPrestamo.persona,
+      categoria: datosPrestamo.categoria || 'general',
+      fechaPrestamo: datosPrestamo.fechaPrestamo,
+      fechaDevolucion: datosPrestamo.fechaDevolucion,
+      concepto: datosPrestamo.concepto || '',
+      estado: 'activo',
+      montoPagado: 0,
+      historialPagos: [],
+      recordatorios: {
+        diasAntes: datosPrestamo.diasRecordatorio || 3,
+        activo: true,
+        ultimaNotificacion: null
+      },
+      fechaCreacion: new Date().toISOString()
+    };
+    
+    // Reducir efectivo disponible al crear el préstamo
+    const montoPrestado = parseFloat(datosPrestamo.montoPrestado);
+    
+    // Buscar activos de efectivo o cuenta bancaria para reducir
+    const activosEfectivo = datos.meses[numeroMes].activos.filter(activo => 
+      activo.descripcion.toLowerCase().includes('efectivo') || 
+      activo.descripcion.toLowerCase().includes('cuenta') ||
+      activo.descripcion.toLowerCase().includes('banco') ||
+      activo.descripcion.toLowerCase().includes('ahorro')
+    );
+    
+    if (activosEfectivo.length > 0) {
+      // Reducir del primer activo de efectivo encontrado
+      const activoEfectivo = activosEfectivo[0];
+      if (activoEfectivo.valor >= montoPrestado) {
+        activoEfectivo.valor -= montoPrestado;
+        activoEfectivo.fechaModificacion = new Date().toISOString();
+      } else {
+        // Si no hay suficiente efectivo, crear un registro negativo
+        const nuevoActivo = {
+          id: Date.now().toString() + '_prestamo',
+          descripcion: `Efectivo prestado a ${datosPrestamo.persona}`,
+          valor: -montoPrestado,
+          fecha: new Date().toISOString(),
+          tipo: 'efectivo_prestado'
+        };
+        datos.meses[numeroMes].activos.push(nuevoActivo);
+      }
+    } else {
+      // Si no hay activos de efectivo, crear uno negativo
+      const nuevoActivo = {
+        id: Date.now().toString() + '_prestamo',
+        descripcion: `Efectivo prestado a ${datosPrestamo.persona}`,
+        valor: -montoPrestado,
+        fecha: new Date().toISOString(),
+        tipo: 'efectivo_prestado'
+      };
+      datos.meses[numeroMes].activos.push(nuevoActivo);
+    }
+    
+    datos.prestamosOtorgados[id] = prestamo;
+    const guardado = guardarDatosStorage(datos);
+    
+    if (!guardado) {
+      throw new Error('No se pudo guardar el préstamo');
+    }
+    
+    return { exito: true, prestamo, id };
+  } catch (error) {
+    console.error('Error creando préstamo otorgado:', error);
+    throw error;
+  }
+};
+
+// Obtener todos los préstamos otorgados
+export const obtenerPrestamosOtorgados = () => {
+  try {
+    const datos = obtenerDatosStorage();
+    return datos.prestamosOtorgados || {};
+  } catch (error) {
+    console.error('Error obteniendo préstamos otorgados:', error);
+    return {};
+  }
+};
+
+// Obtener préstamo por ID
+export const obtenerPrestamoPorId = (id) => {
+  try {
+    const datos = obtenerDatosStorage();
+    return datos.prestamosOtorgados[id] || null;
+  } catch (error) {
+    console.error('Error obteniendo préstamo por ID:', error);
+    return null;
+  }
+};
+
+// Actualizar préstamo otorgado
+export const actualizarPrestamoOtorgado = (id, datosActualizados) => {
+  try {
+    const datos = obtenerDatosStorage();
+    
+    if (!datos.prestamosOtorgados[id]) {
+      throw new Error('Préstamo no encontrado');
+    }
+    
+    // Recalcular ganancia y porcentaje si se modifican los montos
+    if (datosActualizados.montoPrestado || datosActualizados.montoARecibir) {
+      const montoPrestado = datosActualizados.montoPrestado || datos.prestamosOtorgados[id].montoPrestado;
+      const montoARecibir = datosActualizados.montoARecibir || datos.prestamosOtorgados[id].montoARecibir;
+      
+      datosActualizados.ganancia = montoARecibir - montoPrestado;
+      datosActualizados.porcentajeGanancia = ((montoARecibir - montoPrestado) / montoPrestado) * 100;
+    }
+    
+    datos.prestamosOtorgados[id] = {
+      ...datos.prestamosOtorgados[id],
+      ...datosActualizados,
+      fechaModificacion: new Date().toISOString()
+    };
+    
+    const guardado = guardarDatosStorage(datos);
+    
+    if (!guardado) {
+      throw new Error('No se pudo actualizar el préstamo');
+    }
+    
+    return { exito: true, prestamo: datos.prestamosOtorgados[id] };
+  } catch (error) {
+    console.error('Error actualizando préstamo otorgado:', error);
+    throw error;
+  }
+};
+
+// Eliminar préstamo otorgado
+export const eliminarPrestamoOtorgado = (id) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    
+    if (!datos.prestamosOtorgados[id]) {
+      throw new Error('Préstamo no encontrado');
+    }
+    
+    const prestamo = datos.prestamosOtorgados[id];
+    
+    // Si el préstamo no está completamente pagado, devolver el efectivo restante
+    if (prestamo.estado !== 'pagado') {
+      const montoRestante = prestamo.montoARecibir - prestamo.montoPagado;
+      
+      // Buscar activos de efectivo para devolver el monto no cobrado
+      const activosEfectivo = datos.meses[numeroMes].activos.filter(activo => 
+        activo.descripcion.toLowerCase().includes('efectivo') || 
+        activo.descripcion.toLowerCase().includes('cuenta') ||
+        activo.descripcion.toLowerCase().includes('banco') ||
+        activo.descripcion.toLowerCase().includes('ahorro')
+      );
+      
+      if (activosEfectivo.length > 0) {
+        // Devolver el monto restante al primer activo de efectivo
+        const activoEfectivo = activosEfectivo[0];
+        activoEfectivo.valor += montoRestante;
+        activoEfectivo.fechaModificacion = new Date().toISOString();
+      } else {
+        // Si no hay activos de efectivo, crear uno nuevo con el monto recuperado
+        const nuevoActivo = {
+          id: Date.now().toString() + '_recuperacion_prestamo',
+          descripcion: `Recuperación de préstamo cancelado - ${prestamo.persona}`,
+          valor: montoRestante,
+          fecha: new Date().toISOString(),
+          tipo: 'recuperacion_prestamo'
+        };
+        datos.meses[numeroMes].activos.push(nuevoActivo);
+      }
+    }
+    
+    delete datos.prestamosOtorgados[id];
+    const guardado = guardarDatosStorage(datos);
+    
+    if (!guardado) {
+      throw new Error('No se pudo eliminar el préstamo');
+    }
+    
+    return { exito: true };
+  } catch (error) {
+    console.error('Error eliminando préstamo otorgado:', error);
+    throw error;
+  }
+};
+
+// Registrar pago de préstamo
+export const registrarPagoPrestamo = (idPrestamo, datosPago) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const numeroMes = obtenerNumeroMes();
+    const prestamo = datos.prestamosOtorgados[idPrestamo];
+    
+    if (!prestamo) {
+      throw new Error('Préstamo no encontrado');
+    }
+    
+    // Verificar que el mes esté inicializado
+    if (!datos.meses[numeroMes]) {
+      throw new Error('El mes no está inicializado');
+    }
+    
+    const montoPago = parseFloat(datosPago.monto);
+    const nuevoMontoPagado = prestamo.montoPagado + montoPago;
+    
+    // Validar que no se pague más de lo acordado
+    if (nuevoMontoPagado > prestamo.montoARecibir) {
+      throw new Error('El monto del pago excede lo acordado');
+    }
+    
+    // Crear registro de pago
+    const pago = {
+      id: 'pago_' + Date.now(),
+      fecha: datosPago.fecha || new Date().toISOString().split('T')[0],
+      monto: montoPago,
+      descripcion: datosPago.descripcion || '',
+      fechaRegistro: new Date().toISOString()
+    };
+    
+    // Actualizar préstamo
+    prestamo.montoPagado = nuevoMontoPagado;
+    prestamo.historialPagos.push(pago);
+    
+    // Actualizar estado
+    if (nuevoMontoPagado >= prestamo.montoARecibir) {
+      prestamo.estado = 'pagado';
+      prestamo.fechaPago = new Date().toISOString();
+    } else if (nuevoMontoPagado > 0) {
+      prestamo.estado = 'parcial';
+    }
+    
+    // Aumentar efectivo disponible al recibir el pago
+    // Buscar activos de efectivo o cuenta bancaria para aumentar
+    const activosEfectivo = datos.meses[numeroMes].activos.filter(activo => 
+      activo.descripcion.toLowerCase().includes('efectivo') || 
+      activo.descripcion.toLowerCase().includes('cuenta') ||
+      activo.descripcion.toLowerCase().includes('banco') ||
+      activo.descripcion.toLowerCase().includes('ahorro')
+    );
+    
+    if (activosEfectivo.length > 0) {
+      // Aumentar el primer activo de efectivo encontrado
+      const activoEfectivo = activosEfectivo[0];
+      activoEfectivo.valor += montoPago;
+      activoEfectivo.fechaModificacion = new Date().toISOString();
+    } else {
+      // Si no hay activos de efectivo, crear uno nuevo
+      const nuevoActivo = {
+        id: Date.now().toString() + '_pago_prestamo',
+        descripcion: `Pago recibido de ${prestamo.persona}`,
+        valor: montoPago,
+        fecha: new Date().toISOString(),
+        tipo: 'efectivo_recibido'
+      };
+      datos.meses[numeroMes].activos.push(nuevoActivo);
+    }
+    
+    // Si es el pago final, registrar la ganancia como ingreso adicional
+    if (nuevoMontoPagado >= prestamo.montoARecibir && prestamo.ganancia > 0) {
+      const ingresoGanancia = {
+        id: Date.now().toString() + '_ganancia',
+        descripcion: `Ganancia por préstamo a ${prestamo.persona}`,
+        valor: prestamo.ganancia,
+        fecha: new Date().toISOString(),
+        categoria: 'inversion',
+        tipo: 'ganancia_prestamo'
+      };
+      datos.meses[numeroMes].ingresos.push(ingresoGanancia);
+    }
+    
+    prestamo.fechaModificacion = new Date().toISOString();
+    
+    const guardado = guardarDatosStorage(datos);
+    
+    if (!guardado) {
+      throw new Error('No se pudo registrar el pago');
+    }
+    
+    return { 
+      exito: true, 
+      prestamo, 
+      pago,
+      montoRestante: prestamo.montoARecibir - prestamo.montoPagado
+    };
+  } catch (error) {
+    console.error('Error registrando pago de préstamo:', error);
+    throw error;
+  }
+};
+
+// Calcular estadísticas de préstamos
+export const calcularEstadisticasPrestamos = () => {
+  try {
+    const prestamos = obtenerPrestamosOtorgados();
+    const prestamosList = Object.values(prestamos);
+    
+    const estadisticas = {
+      totalPrestamos: prestamosList.length,
+      prestamosActivos: prestamosList.filter(p => p.estado === 'activo').length,
+      prestamosVencidos: prestamosList.filter(p => p.estado === 'vencido').length,
+      prestamosPagados: prestamosList.filter(p => p.estado === 'pagado').length,
+      prestamosParciales: prestamosList.filter(p => p.estado === 'parcial').length,
+      
+      montoTotalPrestado: prestamosList.reduce((sum, p) => sum + p.montoPrestado, 0),
+      montoTotalARecibir: prestamosList.reduce((sum, p) => sum + p.montoARecibir, 0),
+      montoTotalPagado: prestamosList.reduce((sum, p) => sum + p.montoPagado, 0),
+      
+      gananciaTotalEsperada: prestamosList.reduce((sum, p) => sum + p.ganancia, 0),
+      gananciaRealizada: prestamosList
+        .filter(p => p.estado === 'pagado')
+        .reduce((sum, p) => sum + p.ganancia, 0),
+      
+      montoPendienteCobro: prestamosList
+        .filter(p => p.estado === 'activo' || p.estado === 'parcial' || p.estado === 'vencido')
+        .reduce((sum, p) => sum + (p.montoARecibir - p.montoPagado), 0)
+    };
+    
+    return estadisticas;
+  } catch (error) {
+    console.error('Error calculando estadísticas de préstamos:', error);
+    return null;
+  }
+};
+
+// Verificar préstamos próximos a vencer
+export const verificarPrestamosProximosVencer = () => {
+  try {
+    const prestamos = obtenerPrestamosOtorgados();
+    const hoy = new Date();
+    const proximosVencer = [];
+    const vencidos = [];
+    
+    Object.values(prestamos).forEach(prestamo => {
+      if (prestamo.estado === 'activo' || prestamo.estado === 'parcial') {
+        const fechaVencimiento = new Date(prestamo.fechaDevolucion);
+        const diasHastaVencimiento = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+        
+        if (diasHastaVencimiento < 0) {
+          // Préstamo vencido
+          vencidos.push({
+            ...prestamo,
+            diasVencido: Math.abs(diasHastaVencimiento)
+          });
+          
+          // Actualizar estado a vencido
+          const datos = obtenerDatosStorage();
+          datos.prestamosOtorgados[prestamo.id].estado = 'vencido';
+          guardarDatosStorage(datos);
+          
+        } else if (diasHastaVencimiento <= prestamo.recordatorios.diasAntes) {
+          // Préstamo próximo a vencer
+          proximosVencer.push({
+            ...prestamo,
+            diasRestantes: diasHastaVencimiento
+          });
+        }
+      }
+    });
+    
+    return {
+      proximosVencer,
+      vencidos,
+      totalAlertas: proximosVencer.length + vencidos.length
+    };
+  } catch (error) {
+    console.error('Error verificando préstamos próximos a vencer:', error);
+    return { proximosVencer: [], vencidos: [], totalAlertas: 0 };
+  }
+};
+
+// Obtener préstamos con información de vencimiento
+export const obtenerPrestamosConVencimiento = () => {
+  try {
+    const prestamos = obtenerPrestamosOtorgados();
+    const hoy = new Date();
+    const prestamosConInfo = {};
+    
+    Object.entries(prestamos).forEach(([id, prestamo]) => {
+      const fechaVencimiento = new Date(prestamo.fechaDevolucion);
+      const diasHastaVencimiento = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+      
+      prestamosConInfo[id] = {
+        ...prestamo,
+        diasHastaVencimiento,
+        esHoy: diasHastaVencimiento === 0,
+        esProximo: diasHastaVencimiento > 0 && diasHastaVencimiento <= prestamo.recordatorios.diasAntes,
+        estaVencido: diasHastaVencimiento < 0,
+        montoRestante: prestamo.montoARecibir - prestamo.montoPagado
+      };
+    });
+    
+    return prestamosConInfo;
+  } catch (error) {
+    console.error('Error obteniendo préstamos con vencimiento:', error);
+    return {};
   }
 };
 

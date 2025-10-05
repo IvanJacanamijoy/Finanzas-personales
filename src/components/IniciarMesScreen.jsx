@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  inicializarMes, 
-  obtenerDatosMes, 
-  insertarIngreso, 
-  editarIngreso, 
+import {
+  inicializarMes,
+  obtenerDatosMes,
+  insertarIngreso,
+  editarIngreso,
   eliminarIngreso,
   mesEstaInicializado,
   verificarDeudasPendientes,
@@ -20,11 +20,11 @@ function IniciarMesScreen() {
   const [ingresos, setIngresos] = useState([]);
   const [mesYaInicializado, setMesYaInicializado] = useState(false);
   const [editandoIngreso, setEditandoIngreso] = useState(null);
-  
+
   // Estados para deudas programadas
   const [deudasPendientes, setDeudasPendientes] = useState([]);
   const [mostrarDeudasPendientes, setMostrarDeudasPendientes] = useState(false);
-  
+
   const { showSuccess, showError } = useToast();
 
   useEffect(() => {
@@ -37,7 +37,7 @@ function IniciarMesScreen() {
       setLoading(true);
       const inicializado = await mesEstaInicializado();
       setMesYaInicializado(inicializado);
-      
+
       if (inicializado) {
         const datos = await obtenerDatosMes();
         setIngresos(datos.ingresos || []);
@@ -64,7 +64,7 @@ function IniciarMesScreen() {
   const manejarCambioMonto = (e) => {
     const inputValue = e.target.value;
     const numeroLimpio = removerSeparadores(inputValue);
-    
+
     setMontoIngreso(numeroLimpio);
     setMontoIngresoDisplay(formatearNumeroConSeparadores(numeroLimpio));
   };
@@ -84,7 +84,7 @@ function IniciarMesScreen() {
     try {
       setLoading(true);
       await inicializarMes(monto, descripcionIngreso);
-      
+
       // Generar deudas automáticas si hay deudas pendientes
       if (deudasPendientes.length > 0) {
         await generarDeudasAutomaticas();
@@ -92,7 +92,7 @@ function IniciarMesScreen() {
       } else {
         showSuccess('¡Mes inicializado correctamente!');
       }
-      
+
       await cargarDatos();
       setMontoIngreso('');
       setMontoIngresoDisplay('');
@@ -131,7 +131,7 @@ function IniciarMesScreen() {
         await insertarIngreso(descripcionIngreso, monto);
         showSuccess('¡Ingreso agregado correctamente!');
       }
-      
+
       await cargarDatos();
       setMontoIngreso('');
       setMontoIngresoDisplay('');
@@ -203,24 +203,12 @@ function IniciarMesScreen() {
     <div className="min-h-screen gradient-bg">
       {/* Header */}
       <div className="header-gradient text-white py-6 px-6 shadow-lg">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold mb-1 text-white">
-              {mesYaInicializado ? 'Gestionar Ingresos' : 'Inicializar Mes'}
-            </h1>
-            <p className="text-primary-200 text-white">
-              {mesYaInicializado ? 'Administra tus fuentes de ingresos' : 'Configura tu ingreso principal para comenzar'}
-            </p>
-          </div>
-          <button
-            onClick={() => navigation.navigate('/')}
-            className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-        </div>
+        <h1 className="text-2xl font-bold mb-1 text-white">
+          {mesYaInicializado ? 'Gestionar Ingresos' : 'Inicializar Mes'}
+        </h1>
+        <p className="text-primary-200">
+          {mesYaInicializado ? 'Administra tus fuentes de ingresos' : 'Configura tu ingreso principal para comenzar'}
+        </p>
       </div>
 
       {/* Content */}
@@ -233,9 +221,9 @@ function IniciarMesScreen() {
                 {editandoIngreso ? 'Editar Ingreso' : (mesYaInicializado ? 'Agregar Nuevo Ingreso' : 'Ingreso Principal')}
               </h2>
               <p className="text-gray-600">
-                {editandoIngreso 
+                {editandoIngreso
                   ? 'Modifica los datos del ingreso seleccionado'
-                  : (mesYaInicializado 
+                  : (mesYaInicializado
                     ? 'Registra ingresos adicionales como bonos, freelance, etc.'
                     : 'Ingresa tu salario o ingreso principal del mes'
                   )
@@ -326,7 +314,7 @@ function IniciarMesScreen() {
                 </div>
                 <h3 className="text-lg font-medium text-gray-800 mb-2">Sin ingresos registrados</h3>
                 <p className="text-gray-600">
-                  {mesYaInicializado 
+                  {mesYaInicializado
                     ? 'Agrega tu primer ingreso usando el formulario'
                     : 'Inicializa el mes para comenzar a registrar ingresos'
                   }
@@ -477,7 +465,7 @@ function IniciarMesScreen() {
                   <div>
                     <h4 className="font-medium text-blue-800">¿Qué significa esto?</h4>
                     <p className="text-blue-700 text-sm mt-1">
-                      Estas deudas se agregarán automáticamente a tus pasivos del mes cuando inicialices el mes. 
+                      Estas deudas se agregarán automáticamente a tus pasivos del mes cuando inicialices el mes.
                       Puedes continuar con la inicialización o cerrar este diálogo para revisar las deudas programadas primero.
                     </p>
                   </div>

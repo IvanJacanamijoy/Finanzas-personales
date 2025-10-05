@@ -6,7 +6,8 @@ import {
   obtenerDatosMesPorId, 
   generarYGuardarReporteMensual,
   obtenerComparativaMeses,
-  obtenerTendenciasMeses
+  obtenerTendenciasMeses,
+  obtenerPrestamosOtorgados
 } from '../utils/database';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
@@ -138,7 +139,16 @@ function ReportesScreen() {
   };
 
   const calcularTotalActivos = () => {
-    return datos.activos.reduce((total, activo) => total + activo.valor, 0);
+    const totalActivosRegulares = datos.activos.reduce((total, activo) => total + activo.valor, 0);
+    
+    // Agregar préstamos otorgados como activos
+    const prestamos = datos.prestamosOtorgados || {};
+    const totalPrestamos = Object.values(prestamos).reduce((total, prestamo) => {
+      // Solo contar el monto restante por cobrar como activo
+      return total + (prestamo.montoARecibir - prestamo.montoPagado);
+    }, 0);
+    
+    return totalActivosRegulares + totalPrestamos;
   };
 
   const calcularTotalPasivos = () => {

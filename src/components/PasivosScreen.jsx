@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  insertarPasivo, 
-  obtenerDatosMes, 
-  editarPasivo, 
+import {
+  insertarPasivo,
+  obtenerDatosMes,
+  editarPasivo,
   eliminarPasivo,
   crearDeudaProgramada,
   obtenerDeudasProgramadas,
@@ -22,7 +22,7 @@ function PasivosScreen() {
   const [loading, setLoading] = useState(false);
   const [pasivos, setPasivos] = useState([]);
   const [editandoPasivo, setEditandoPasivo] = useState(null);
-  
+
   // Estados para deudas programadas
   const [mostrarDeudaProgramada, setMostrarDeudaProgramada] = useState(false);
   const [deudasProgramadas, setDeudasProgramadas] = useState([]);
@@ -37,7 +37,7 @@ function PasivosScreen() {
     fechaInicio: '',
     fechaFin: ''
   });
-  
+
   const { showSuccess, showError } = useToast();
 
   useEffect(() => {
@@ -79,7 +79,7 @@ function PasivosScreen() {
   const manejarCambioValor = (e) => {
     const inputValue = e.target.value;
     const numeroLimpio = removerSeparadores(inputValue);
-    
+
     setValorPasivo(numeroLimpio);
     setValorPasivoDisplay(formatearNumeroConSeparadores(numeroLimpio));
   };
@@ -108,7 +108,7 @@ function PasivosScreen() {
         await insertarPasivo(descripcionPasivo, valor, tipoPasivo);
         showSuccess('¡Pasivo agregado correctamente!');
       }
-      
+
       await cargarDatos();
       setDescripcionPasivo('');
       setValorPasivo('');
@@ -245,8 +245,8 @@ function PasivosScreen() {
   };
 
   const manejarAgregarDeudaProgramada = async () => {
-    if (!formDeudaProgramada.descripcion || !formDeudaProgramada.categoria || 
-        !formDeudaProgramada.valor || !formDeudaProgramada.fechaInicio) {
+    if (!formDeudaProgramada.descripcion || !formDeudaProgramada.categoria ||
+      !formDeudaProgramada.valor || !formDeudaProgramada.fechaInicio) {
       showError('Por favor completa todos los campos obligatorios');
       return;
     }
@@ -368,30 +368,20 @@ function PasivosScreen() {
     <div className="min-h-screen gradient-bg">
       {/* Header */}
       <div className="header-gradient text-white py-6 px-6 shadow-lg">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+        <div className="max-w-4xl mx-auto flex items-center justify-between flex-col gap-5 md:flex-row md:gap-0">
           <div>
             <h1 className="text-2xl font-bold mb-1">Gestionar Pasivos</h1>
             <p className="text-primary-100">Registra y controla tus deudas y obligaciones</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMostrarDeudaProgramada(true)}
-              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Deudas Programadas
-            </button>
-            <button
-              onClick={() => navigation.navigate('/')}
-              className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-lg transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </button>
-          </div>
+          <button
+            onClick={() => setMostrarDeudaProgramada(true)}
+            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Deudas Programadas
+          </button>
         </div>
       </div>
 
@@ -405,8 +395,8 @@ function PasivosScreen() {
                 {editandoPasivo ? 'Editar Pasivo' : 'Agregar Nuevo Pasivo'}
               </h2>
               <p className="text-gray-600">
-                {editandoPasivo 
-                  ? 'Modifica los datos del pasivo seleccionado' 
+                {editandoPasivo
+                  ? 'Modifica los datos del pasivo seleccionado'
                   : 'Registra tus deudas como hipotecas, préstamos, tarjetas de crédito, etc.'
                 }
               </p>
@@ -534,7 +524,7 @@ function PasivosScreen() {
                   let colorCategoria = 'bg-blue-100 text-blue-800';
                   let indicadorVencimiento = '';
                   let colorIndicador = '';
-                  
+
                   if (deuda.esHoy) {
                     colorCategoria = 'bg-red-100 text-red-800';
                     indicadorVencimiento = '¡VENCE HOY!';
@@ -548,7 +538,7 @@ function PasivosScreen() {
                     indicadorVencimiento = `Vencida hace ${Math.abs(deuda.diasHastaVencimiento)} día(s)`;
                     colorIndicador = 'bg-red-600 text-white';
                   }
-                  
+
                   return (
                     <div key={`deuda-${deuda.id}-${index}`} className="flex bg-gradient-to-r from-blue-50 to-indigo-50 w-full py-4 px-4 rounded-lg shadow border-l-4 border-blue-500 justify-between items-center">
                       <div className="flex items-center flex-1">
@@ -596,7 +586,7 @@ function PasivosScreen() {
                     </div>
                   );
                 })}
-                
+
                 {/* Pasivos regulares */}
                 {pasivos.map((pasivo, index) => {
                   const categoria = pasivo.categoria || obtenerCategoriaPasivo(pasivo.descripcion).categoria;
@@ -757,7 +747,7 @@ function PasivosScreen() {
                   <h3 className="text-lg font-semibold text-gray-800">
                     {editandoDeudaProgramada ? 'Editar Deuda' : 'Nueva Deuda Programada'}
                   </h3>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Descripción *
@@ -847,8 +837,8 @@ function PasivosScreen() {
                   <div className="flex gap-3 pt-4">
                     <button
                       onClick={manejarAgregarDeudaProgramada}
-                      disabled={loading || !formDeudaProgramada.descripcion || !formDeudaProgramada.categoria || 
-                               !formDeudaProgramada.valor || !formDeudaProgramada.fechaInicio}
+                      disabled={loading || !formDeudaProgramada.descripcion || !formDeudaProgramada.categoria ||
+                        !formDeudaProgramada.valor || !formDeudaProgramada.fechaInicio}
                       className="btn-primary flex-1"
                     >
                       {loading ? 'Guardando...' : (editandoDeudaProgramada ? 'Actualizar' : 'Crear Deuda')}
@@ -865,7 +855,7 @@ function PasivosScreen() {
                 {/* Lista de deudas programadas */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-800">Deudas Programadas Existentes</h3>
-                  
+
                   {deudasProgramadas.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -883,9 +873,8 @@ function PasivosScreen() {
                                 <h4 className={`font-medium ${deuda.activa ? 'text-gray-800' : 'text-gray-500'}`}>
                                   {deuda.descripcion}
                                 </h4>
-                                <span className={`px-2 py-1 text-xs rounded-full ${
-                                  deuda.activa ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                                }`}>
+                                <span className={`px-2 py-1 text-xs rounded-full ${deuda.activa ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                                  }`}>
                                   {deuda.activa ? 'Activa' : 'Inactiva'}
                                 </span>
                               </div>
@@ -902,11 +891,10 @@ function PasivosScreen() {
                             <div className="flex items-center gap-2 ml-4">
                               <button
                                 onClick={() => manejarToggleDeudaProgramada(deuda.id)}
-                                className={`p-2 rounded-lg transition-colors ${
-                                  deuda.activa 
-                                    ? 'text-green-600 hover:bg-green-50' 
+                                className={`p-2 rounded-lg transition-colors ${deuda.activa
+                                    ? 'text-green-600 hover:bg-green-50'
                                     : 'text-gray-400 hover:bg-gray-100'
-                                }`}
+                                  }`}
                                 title={deuda.activa ? 'Desactivar' : 'Activar'}
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
