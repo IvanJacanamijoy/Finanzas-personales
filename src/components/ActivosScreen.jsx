@@ -19,6 +19,7 @@ function ActivosScreen() {
   const [valorActivoDisplay, setValorActivoDisplay] = useState('');
   const [loading, setLoading] = useState(false);
   const [activos, setActivos] = useState([]);
+  const [cuentasPorCobrar, setCuentasPorCobrar] = useState([]);
   const [editandoActivo, setEditandoActivo] = useState(null);
   
   // Estados para préstamos otorgados
@@ -58,6 +59,7 @@ function ActivosScreen() {
       setLoading(true);
       const datos = await obtenerDatosMes();
       setActivos(datos.activos || []);
+      setCuentasPorCobrar(datos.cuentasPorCobrar || []);
       setPrestamos(datos.prestamosOtorgados || {});
     } catch (error) {
       console.error('Error al cargar datos:', error);
@@ -144,15 +146,28 @@ function ActivosScreen() {
   };
 
   const calcularTotalActivos = () => {
-    const totalActivosRegulares = activos.reduce((total, activo) => total + activo.valor, 0);
+    // Filtrar activos excluyendo los préstamos negativos para evitar doble contabilidad
+    const activosReales = activos.filter(activo => activo.tipo !== 'efectivo_prestado');
     
-    // Agregar préstamos otorgados como activos
-    const totalPrestamos = Object.values(prestamos).reduce((total, prestamo) => {
-      // Solo contar el monto restante por cobrar como activo
-      return total + (prestamo.montoARecibir - prestamo.montoPagado);
-    }, 0);
+    // Debug: mostrar todos los activos para verificar
+    console.log('Todos los activos:', activos);
+    console.log('Tipos de activos:', activos.map(a => ({ tipo: a.tipo, descripcion: a.descripcion, valor: a.valor })));
+    console.log('Activos reales (sin efectivo_prestado):', activosReales);
     
-    return totalActivosRegulares + totalPrestamos;
+    const totalActivosRegulares = activosReales.reduce((total, activo) => total + activo.valor, 0);
+    
+    // Calcular total de cuentas por cobrar pendientes
+    const totalCuentasPorCobrar = cuentasPorCobrar
+      .filter(cuenta => cuenta.estado === 'pendiente')
+      .reduce((total, cuenta) => total + cuenta.montoRestante, 0);
+    
+    console.log('Total activos regulares:', totalActivosRegulares);
+    console.log('Total cuentas por cobrar:', totalCuentasPorCobrar);
+    
+    const totalFinal = totalActivosRegulares + totalCuentasPorCobrar;
+    console.log('Total final:', totalFinal);
+    
+    return totalFinal;
   };
 
   const formatearMoneda = (monto) => {
@@ -327,14 +342,14 @@ function ActivosScreen() {
   const editarPrestamo = (id, prestamo) => {
     setEditandoPrestamo(id);
     setFormPrestamo({
-      persona: prestamo.persona,
-      montoPrestado: formatearNumeroConSeparadores(prestamo.montoPrestado.toString()),
-      montoARecibir: formatearNumeroConSeparadores(prestamo.montoARecibir.toString()),
-      fechaPrestamo: prestamo.fechaPrestamo,
-      fechaDevolucion: prestamo.fechaDevolucion,
-      concepto: prestamo.concepto,
-      categoria: prestamo.categoria,
-      diasRecordatorio: prestamo.diasRecordatorio
+      persona: prestamo.persona || '',
+      montoPrestado: formatearNumeroConSeparadores(prestamo.montoPrestado?.toString() || ''),
+      montoARecibir: formatearNumeroConSeparadores(prestamo.montoARecibir?.toString() || ''),
+      fechaPrestamo: prestamo.fechaPrestamo || new Date().toISOString().split('T')[0],
+      fechaDevolucion: prestamo.fechaDevolucion || '',
+      concepto: prestamo.concepto || '',
+      categoria: prestamo.categoria || 'general',
+      diasRecordatorio: prestamo.diasRecordatorio || 3
     });
     setMostrarModalPrestamo(true);
   };
@@ -480,7 +495,7 @@ function ActivosScreen() {
           </div>
 
           {/* Lista de activos */}
-          <div className="card">
+          <div className="card col-span-2 md:col-span-1">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-gray-800 mb-2">Activos Registrados</h2>
               <div className="flex items-center justify-between">
@@ -489,12 +504,12 @@ function ActivosScreen() {
                   <p className="text-2xl font-bold value-positive">
                     {formatearMoneda(calcularTotalActivos())}
                   </p>
-                  <p className="text-sm text-gray-500">{activos.length} activo(s)</p>
+                  <p className="text-sm text-gray-500">{activos.filter(activo => activo.tipo !== 'efectivo_prestado').length} activo(s)</p>
                 </div>
               </div>
             </div>
 
-            {activos.length === 0 ? (
+            {activos.filter(activo => activo.tipo !== 'efectivo_prestado').length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-16 h-16 bg-accent-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg className="w-8 h-8 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -508,7 +523,7 @@ function ActivosScreen() {
               </div>
             ) : (
               <div className="space-y-0 rounded-lg overflow-hidden my-2 flex flex-col items-center gap-2">
-                {activos.map((activo, index) => (
+                {activos.filter(activo => activo.tipo !== 'efectivo_prestado').map((activo, index) => (
                   <div key={activo.id || index} className="flex bg-white w-full py-4 px-4 rounded-lg shadow justify-between items-center">
                     <div className="flex">
                       <div className="w-10 h-10 bg-accent-100 rounded-lg flex items-center justify-center mr-3 text-accent-600">
@@ -559,7 +574,7 @@ function ActivosScreen() {
           </div>
 
           {/* Préstamos Otorgados */}
-          <div className="card">
+          <div className="card col-span-2">
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-800 mb-2">Préstamos Otorgados</h2>

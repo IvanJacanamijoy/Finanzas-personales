@@ -8,6 +8,7 @@ import IniciarMesScreen from './components/IniciarMesScreen.jsx';
 import ActivosScreen from './components/ActivosScreen.jsx';
 import PasivosScreen from './components/PasivosScreen.jsx';
 import ReportesScreen from './components/ReportesScreen.jsx';
+import CuentasPorCobrarScreen from './components/CuentasPorCobrarScreen.jsx';
 import NavBar from './components/NavBar.jsx';
 
 // Importar contexto de Toast
@@ -24,6 +25,7 @@ function App() {
             <Route path="/iniciar-mes" element={<IniciarMesScreen />} />
             <Route path="/activos" element={<ActivosScreen />} />
             <Route path="/pasivos" element={<PasivosScreen />} />
+            <Route path="/cuentas-por-cobrar" element={<CuentasPorCobrarScreen />} />
             <Route path="/reportes" element={<ReportesScreen />} />
           </Routes>
         </div>

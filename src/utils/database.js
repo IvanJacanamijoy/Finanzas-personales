@@ -227,11 +227,18 @@ export const obtenerDatosMes = async () => {
         inicializado: false,
         ingresos: [],
         activos: [],
-        pasivos: []
+        pasivos: [],
+        cuentasPorCobrar: [],
+        prestamosOtorgados: datos.prestamosOtorgados || {}
       };
     }
     
-    return datos.meses[numeroMes];
+    // Incluir prestamosOtorgados y cuentasPorCobrar en los datos del mes
+    return {
+      ...datos.meses[numeroMes],
+      cuentasPorCobrar: datos.meses[numeroMes].cuentasPorCobrar || [],
+      prestamosOtorgados: datos.prestamosOtorgados || {}
+    };
   } catch (error) {
     console.error('Error obteniendo datos del mes:', error);
     throw error;
@@ -1232,6 +1239,11 @@ export const crearPrestamoOtorgado = (datosPrestamo) => {
       throw new Error('El mes no está inicializado');
     }
     
+    // Inicializar prestamosOtorgados si no existe
+    if (!datos.prestamosOtorgados) {
+      datos.prestamosOtorgados = {};
+    }
+    
     const prestamo = {
       id,
       montoPrestado: parseFloat(datosPrestamo.montoPrestado),
@@ -1469,12 +1481,14 @@ export const registrarPagoPrestamo = (idPrestamo, datosPago) => {
     }
     
     // Aumentar efectivo disponible al recibir el pago
-    // Buscar activos de efectivo o cuenta bancaria para aumentar
+    // Buscar activos de efectivo o cuenta bancaria para aumentar (excluyendo préstamos)
     const activosEfectivo = datos.meses[numeroMes].activos.filter(activo => 
-      activo.descripcion.toLowerCase().includes('efectivo') || 
-      activo.descripcion.toLowerCase().includes('cuenta') ||
-      activo.descripcion.toLowerCase().includes('banco') ||
-      activo.descripcion.toLowerCase().includes('ahorro')
+      activo.tipo !== 'efectivo_prestado' && (
+        activo.descripcion.toLowerCase().includes('efectivo') || 
+        activo.descripcion.toLowerCase().includes('cuenta') ||
+        activo.descripcion.toLowerCase().includes('banco') ||
+        activo.descripcion.toLowerCase().includes('ahorro')
+      )
     );
     
     if (activosEfectivo.length > 0) {
@@ -1637,3 +1651,177 @@ export const obtenerPrestamosConVencimiento = () => {
 
 // Inicializar automáticamente al cargar el módulo
 inicializarDB();
+
+// ==================== FUNCIONES PARA CUENTAS POR COBRAR ====================
+
+// Registrar nueva cuenta por cobrar
+export const registrarCuentaPorCobrar = (datosCuenta) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const mesActual = new Date().getMonth();
+    const añoActual = new Date().getFullYear();
+    const numeroMes = mesActual + (añoActual - 2024) * 12;
+    
+    // Asegurar que existe la estructura del mes
+    if (!datos.meses[numeroMes]) {
+      datos.meses[numeroMes] = {
+        ingresos: [],
+        gastos: [],
+        activos: [],
+        deudas: [],
+        cuentasPorCobrar: []
+      };
+    }
+    
+    if (!datos.meses[numeroMes].cuentasPorCobrar) {
+      datos.meses[numeroMes].cuentasPorCobrar = [];
+    }
+    
+    const nuevaCuenta = {
+      id: Date.now().toString() + '_cuenta_cobrar',
+      cliente: datosCuenta.cliente,
+      descripcion: datosCuenta.descripcion,
+      valorTotal: datosCuenta.valorTotal,
+      montoPagado: datosCuenta.montoPagado || 0,
+      montoRestante: datosCuenta.valorTotal - (datosCuenta.montoPagado || 0),
+      fechaVenta: new Date().toISOString(),
+      fechaUltimoPago: datosCuenta.montoPagado > 0 ? new Date().toISOString() : null,
+      estado: (datosCuenta.valorTotal - (datosCuenta.montoPagado || 0)) === 0 ? 'pagado' : 'pendiente',
+      pagos: datosCuenta.montoPagado > 0 ? [{
+        fecha: new Date().toISOString(),
+        monto: datosCuenta.montoPagado,
+        descripcion: 'Pago inicial'
+      }] : []
+    };
+    
+    datos.meses[numeroMes].cuentasPorCobrar.push(nuevaCuenta);
+    
+    // Si hubo un pago inicial, registrarlo como efectivo
+    if (datosCuenta.montoPagado > 0) {
+      const activosEfectivo = datos.meses[numeroMes].activos.filter(activo => 
+        activo.tipo !== 'efectivo_prestado' && (
+          activo.descripcion.toLowerCase().includes('efectivo') || 
+          activo.descripcion.toLowerCase().includes('cuenta') ||
+          activo.descripcion.toLowerCase().includes('banco') ||
+          activo.descripcion.toLowerCase().includes('ahorro')
+        )
+      );
+      
+      if (activosEfectivo.length > 0) {
+        activosEfectivo[0].valor += datosCuenta.montoPagado;
+        activosEfectivo[0].fechaModificacion = new Date().toISOString();
+      } else {
+        const nuevoActivo = {
+          id: Date.now().toString() + '_pago_venta',
+          descripcion: `Pago recibido de ${datosCuenta.cliente}`,
+          valor: datosCuenta.montoPagado,
+          fecha: new Date().toISOString(),
+          tipo: 'efectivo_recibido'
+        };
+        datos.meses[numeroMes].activos.push(nuevoActivo);
+      }
+    }
+    
+    guardarDatosStorage(datos);
+    return nuevaCuenta;
+  } catch (error) {
+    console.error('Error al registrar cuenta por cobrar:', error);
+    throw new Error('Error al registrar la cuenta por cobrar');
+  }
+};
+
+// Registrar pago de cuenta por cobrar
+export const registrarPagoCuentaPorCobrar = (cuentaId, montoPago) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const mesActual = new Date().getMonth();
+    const añoActual = new Date().getFullYear();
+    const numeroMes = mesActual + (añoActual - 2024) * 12;
+    
+    if (!datos.meses[numeroMes] || !datos.meses[numeroMes].cuentasPorCobrar) {
+      throw new Error('No se encontraron cuentas por cobrar para este mes');
+    }
+    
+    const cuenta = datos.meses[numeroMes].cuentasPorCobrar.find(c => c.id === cuentaId);
+    if (!cuenta) {
+      throw new Error('Cuenta por cobrar no encontrada');
+    }
+    
+    if (cuenta.estado === 'pagado') {
+      throw new Error('Esta cuenta ya está completamente pagada');
+    }
+    
+    if (montoPago > cuenta.montoRestante) {
+      throw new Error(`El monto no puede ser mayor al saldo pendiente (${cuenta.montoRestante})`);
+    }
+    
+    // Actualizar la cuenta
+    cuenta.montoPagado += montoPago;
+    cuenta.montoRestante -= montoPago;
+    cuenta.fechaUltimoPago = new Date().toISOString();
+    cuenta.estado = cuenta.montoRestante === 0 ? 'pagado' : 'pendiente';
+    
+    // Agregar el pago al historial
+    cuenta.pagos.push({
+      fecha: new Date().toISOString(),
+      monto: montoPago,
+      descripcion: 'Pago parcial'
+    });
+    
+    // Registrar el efectivo recibido
+    const activosEfectivo = datos.meses[numeroMes].activos.filter(activo => 
+      activo.tipo !== 'efectivo_prestado' && (
+        activo.descripcion.toLowerCase().includes('efectivo') || 
+        activo.descripcion.toLowerCase().includes('cuenta') ||
+        activo.descripcion.toLowerCase().includes('banco') ||
+        activo.descripcion.toLowerCase().includes('ahorro')
+      )
+    );
+    
+    if (activosEfectivo.length > 0) {
+      activosEfectivo[0].valor += montoPago;
+      activosEfectivo[0].fechaModificacion = new Date().toISOString();
+    } else {
+      const nuevoActivo = {
+        id: Date.now().toString() + '_pago_cuenta',
+        descripcion: `Pago recibido de ${cuenta.cliente}`,
+        valor: montoPago,
+        fecha: new Date().toISOString(),
+        tipo: 'efectivo_recibido'
+      };
+      datos.meses[numeroMes].activos.push(nuevoActivo);
+    }
+    
+    guardarDatosStorage(datos);
+    return cuenta;
+  } catch (error) {
+    console.error('Error al registrar pago:', error);
+    throw error;
+  }
+};
+
+// Eliminar cuenta por cobrar
+export const eliminarCuentaPorCobrar = (cuentaId) => {
+  try {
+    const datos = obtenerDatosStorage();
+    const mesActual = new Date().getMonth();
+    const añoActual = new Date().getFullYear();
+    const numeroMes = mesActual + (añoActual - 2024) * 12;
+    
+    if (!datos.meses[numeroMes] || !datos.meses[numeroMes].cuentasPorCobrar) {
+      throw new Error('No se encontraron cuentas por cobrar para este mes');
+    }
+    
+    const indice = datos.meses[numeroMes].cuentasPorCobrar.findIndex(c => c.id === cuentaId);
+    if (indice === -1) {
+      throw new Error('Cuenta por cobrar no encontrada');
+    }
+    
+    datos.meses[numeroMes].cuentasPorCobrar.splice(indice, 1);
+    guardarDatosStorage(datos);
+    return true;
+  } catch (error) {
+    console.error('Error al eliminar cuenta por cobrar:', error);
+    throw error;
+  }
+};
